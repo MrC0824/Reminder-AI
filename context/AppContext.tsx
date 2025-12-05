@@ -50,8 +50,10 @@ interface AppContextType {
   updateVersionInfo: UpdateInfo | null;
   updateErrorMsg: string;
   isUpdateModalOpen: boolean;
+  isPortableUpdate: boolean; // 新增
   closeUpdateModal: () => void;
   startDownload: () => void;
+  downloadPortable: () => void; // 新增
   restartApp: () => void;
   skipUpdate: (version: string) => void;
 }
@@ -121,10 +123,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [updateVersionInfo, setUpdateVersionInfo] = useState<UpdateInfo | null>(null);
   const [updateErrorMsg, setUpdateErrorMsg] = useState('');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isPortableUpdate, setIsPortableUpdate] = useState(false); // 新增
   const [skippedVersions, setSkippedVersions] = useState<string[]>(() => {
       const saved = localStorage.getItem('skipped_versions');
       return saved ? JSON.parse(saved) : [];
   });
+
+  // ... (calculateTotalSeconds, useEffects for timers, logic... omitted for brevity as they are unchanged)
+  // 为了节省篇幅，这里隐藏未修改的计时器逻辑，请在合并时保留 AppContext.tsx 中原有的计时器、音频处理等代码
+  // 下面是 Update Logic Effects 的更新部分
 
   const calculateTotalSeconds = useCallback((val?: number, unit?: string) => {
     const v = val ?? settings.intervalValue;
@@ -140,9 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [totalTime, setTotalTime] = useState(() => calculateTotalSeconds());
   
   const [customTimerStates, setCustomTimerStates] = useState<Record<string, TimerState>>({});
-  
   const [activeAlerts, setActiveAlerts] = useState<Set<string>>(new Set());
-
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [currentAudioSrc, setCurrentAudioSrc] = useState<string>(DEFAULT_AUDIO_URL);
 
@@ -156,13 +161,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const prevActiveHoursEnabled = useRef(settings.activeHoursEnabled);
   const prevRemindersRef = useRef(settings.customReminders);
 
-  // Update Logic Effects
   useEffect(() => {
     if (!ipcRenderer || isNotificationMode) return;
 
     const onUpdateAvailable = (_: any, info: UpdateInfo) => {
         if (skippedVersions.includes(info.version)) return;
         setUpdateVersionInfo(info);
+        setIsPortableUpdate(!!info.portable); // 记录是否为 portable
         setUpdateStatus('available');
         setIsUpdateModalOpen(true);
     };
@@ -204,6 +209,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (ipcRenderer) ipcRenderer.send('start-download');
   };
 
+  const downloadPortable = () => {
+      if (ipcRenderer) ipcRenderer.send('open-url', 'https://github.com/MrC0824/Reminder-AI/releases/latest');
+      setIsUpdateModalOpen(false);
+  };
+
   const restartApp = () => {
       if (ipcRenderer) ipcRenderer.send('restart_app');
   };
@@ -215,17 +225,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsUpdateModalOpen(false);
   };
 
+  // ... (保留原有的计时器初始化、设置保存、音频处理、提醒触发等所有代码) ...
+  // Re-implementing essential hooks for context to work
   useEffect(() => {
-      // FIX: Do not initialize audio in notification window to prevent duplicate sound
       if (isNotificationMode) return;
-
       silentAudioRef.current = new Audio(SILENT_AUDIO_URL);
       silentAudioRef.current.loop = true;
       silentAudioRef.current.volume = 0.01; 
   }, []);
 
   useEffect(() => {
-      // FIX: Notification windows don't need holidays
       if (isNotificationMode) return;
       updateHolidays();
   }, []);
@@ -808,8 +817,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateVersionInfo,
         updateErrorMsg,
         isUpdateModalOpen,
+        isPortableUpdate, // Export
         closeUpdateModal,
         startDownload,
+        downloadPortable, // Export
         restartApp,
         skipUpdate,
       }}

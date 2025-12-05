@@ -67,4 +67,5 @@ export type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'error' 
 export interface UpdateInfo {
     version: string;
     releaseNotes?: string | Array<{ note: string }>;
+    portable?: boolean; // 新增：标识是否为便携版
 }

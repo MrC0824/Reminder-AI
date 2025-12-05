@@ -14,22 +14,16 @@ if (process.platform === 'win32') {
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
 
 // --- AutoUpdater 配置 ---
-autoUpdater.autoDownload = false; // 保持 false，我们在代码里手动触发下载，以便区分 Portable
-autoUpdater.autoInstallOnAppQuit = true; // 【核心】退出应用时自动安装更新
-autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
+autoUpdater.autoDownload = false; // 保持 false，手动触发
+autoUpdater.autoInstallOnAppQuit = true; 
+autoUpdater.verifyUpdateCodeSignature = false; 
 autoUpdater.disableWebInstaller = true; 
 autoUpdater.allowDowngrade = false;
 autoUpdater.fullChangelog = true;
 
-// 设置日志
-// autoUpdater.logger = require("electron-log");
-// autoUpdater.logger.transports.file.level = "info";
-
 let mainWindow = null;
-// Use a Map to store multiple notification windows: key=id, value={ win, data, type }
 const notificationWindows = new Map(); 
 
-// Store user's preferred position for notifications by TYPE
 const notificationPositions = {
     main: null,
     interval: null,
@@ -39,7 +33,6 @@ const notificationPositions = {
 let tray = null;
 let isQuitting = false;
 
-// 获取图标路径 helper
 function getIconPath() {
     return process.env.NODE_ENV === 'development'
         ? path.join(__dirname, 'public/icon.ico')
@@ -286,47 +279,32 @@ function createWindow() {
 // --- AutoUpdater Events ---
 
 autoUpdater.on('update-available', (info) => {
-    // 1. Detect if running as Portable
     const isPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
+    
+    // 注入便携版标识
+    const infoWithPortable = { ...info, portable: isPortable };
 
-    if (isPortable) {
-        // 便携版：弹窗引导去浏览器下载
-        dialog.showMessageBox(mainWindow, {
-            type: 'info',
-            title: '发现新版本',
-            message: `检测到新版本 v${info.version}。\n便携版(Portable)无法自动覆盖更新，请前往下载最新版本。`,
-            buttons: ['去下载', '取消'],
-            defaultId: 0,
-            cancelId: 1
-        }).then(({ response }) => {
-            if (response === 0) {
-                shell.openExternal('https://github.com/MrC0824/Reminder-AI/releases/latest');
-            }
-        });
-    } else {
-        // 安装版：直接开始后台静默下载，不打扰用户
-        console.log('Update available, starting silent download...');
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('update-available', info); // 可选：通知前端显示个小红点
-        }
-        autoUpdater.downloadUpdate().catch(e => console.error('Silent download failed:', e));
+    // 无论是便携版还是安装版，都通知前端显示 UI
+    // 安装版在用户点击确认后会触发 start-download
+    // 便携版在用户点击下载后会触发 open-url
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', infoWithPortable);
     }
+    
+    // 如果是安装版，且你想保持静默下载（可选），可以在这里触发
+    // 但既然前端有"立即更新"按钮，交给前端控制逻辑更清晰
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
-    // 转发进度给前端（Settings面板可以显示）
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('download-progress', progressObj.percent);
     }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-    // 下载完成，准备就绪
-    console.log('Update downloaded. Ready to install on quit.');
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
     }
-    // 注意：这里不调用 quitAndInstall，依赖 autoInstallOnAppQuit = true
 });
 
 autoUpdater.on('error', (err) => {
@@ -344,8 +322,6 @@ app.whenReady().then(() => {
       setTimeout(() => {
           autoUpdater.checkForUpdates().catch(e => console.error("Check for updates failed:", e));
       }, 3000);
-  } else {
-      console.log('Skipping update check in development mode');
   }
 
   screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
@@ -429,7 +405,6 @@ ipcMain.on('confirm-quit', () => {
 
 ipcMain.on('start-download', () => {
     autoUpdater.downloadUpdate().catch(e => {
-        console.error("Download failed:", e);
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('update-error', e.message);
         }
@@ -438,6 +413,11 @@ ipcMain.on('start-download', () => {
 
 ipcMain.on('restart_app', () => {
     autoUpdater.quitAndInstall();
+});
+
+// 新增：打开外部链接
+ipcMain.on('open-url', (event, url) => {
+    shell.openExternal(url);
 });
 
 ipcMain.handle('get-app-version', () => {

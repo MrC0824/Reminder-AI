@@ -14,13 +14,27 @@ interface UpdateModalProps {
     versionInfo?: { version: string; releaseNotes?: string | Array<{ note: string }>; };
     errorMsg?: string;
     progress?: number;
+    isPortable?: boolean;
     onClose: () => void;
     onDownload: () => void;
+    onDownloadPortable: () => void;
     onRestart: () => void;
     onSkip: (version: string) => void;
 }
 
-const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, errorMsg, progress, onClose, onDownload, onRestart, onSkip }) => {
+const UpdateModal: React.FC<UpdateModalProps> = ({ 
+    isOpen, 
+    status, 
+    versionInfo, 
+    errorMsg, 
+    progress, 
+    isPortable, 
+    onClose, 
+    onDownload, 
+    onDownloadPortable,
+    onRestart, 
+    onSkip 
+}) => {
     if (!isOpen || !status) return null;
 
     // Render logic for different statuses
@@ -30,14 +44,24 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
         );
-        if (status === 'available') return (
-            <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center mx-auto mb-4 shrink-0">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-            </div>
-        );
-        // Default downloaded/downloading
+        if (status === 'available') {
+            // Portable 用 info 图标，普通版用 download 图标
+            if (isPortable) {
+                return (
+                    <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+                        <span className="text-3xl font-bold">i</span>
+                    </div>
+                );
+            }
+            return (
+                <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                </div>
+            );
+        }
+        // Downloading / Downloaded - Changed to Blue to match app theme
         return (
-            <div className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-900/20 text-green-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+            <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center mx-auto mb-4 shrink-0">
                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
             </div>
         );
@@ -60,6 +84,17 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
 
     const renderContent = () => {
         if (status === 'available') {
+            // Portable Specific Text
+            if (isPortable) {
+                return (
+                    <div className="mt-2 text-left w-full text-center">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                            便携版(Portable)无法自动覆盖更新，请前往下载最新版本。
+                        </p>
+                    </div>
+                );
+            }
+
             const notes = versionInfo?.releaseNotes;
             let displayNotes = '暂无更新日志';
             if (typeof notes === 'string') displayNotes = notes;
@@ -132,25 +167,43 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
                     {status === 'available' && (
                         <>
                             <button 
-                                onClick={onDownload}
-                                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
+                                onClick={isPortable ? onDownloadPortable : onDownload}
+                                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98] flex items-center justify-center gap-2"
                             >
-                                立即更新
+                                {isPortable ? '→ 去下载' : '立即更新'}
                             </button>
-                            <div className="flex gap-2">
+                            
+                            {isPortable ? (
+                                <div className="flex gap-2">
                                 <button 
                                     onClick={onClose}
-                                    className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                        className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
                                 >
-                                    下次提醒
+                                        下次提醒
                                 </button>
-                                <button 
-                                    onClick={() => versionInfo && onSkip(versionInfo.version)}
-                                    className="flex-1 py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
-                                >
-                                    跳过此版本
-                                </button>
-                            </div>
+                                    <button 
+                                        onClick={() => versionInfo && onSkip(versionInfo.version)}
+                                        className="flex-1 py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                        跳过此版本
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={onClose}
+                                        className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                        下次提醒
+                                    </button>
+                                    <button 
+                                        onClick={() => versionInfo && onSkip(versionInfo.version)}
+                                        className="flex-1 py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                        跳过此版本
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
 
@@ -194,20 +247,12 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
     );
 };
 
-// --- 退出确认模态框组件 ---
+// ... (CloseConfirmModal and StandaloneNotification remain unchanged) ...
+// (Retaining CloseConfirmModal and StandaloneNotification code here to ensure file completeness)
 const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
-
-    const handleMinimize = () => {
-        if (ipcRenderer) ipcRenderer.send('confirm-minimize');
-        onClose();
-    };
-
-    const handleQuit = () => {
-        if (ipcRenderer) ipcRenderer.send('confirm-quit');
-        onClose();
-    };
-
+    const handleMinimize = () => { if (ipcRenderer) ipcRenderer.send('confirm-minimize'); onClose(); };
+    const handleQuit = () => { if (ipcRenderer) ipcRenderer.send('confirm-quit'); onClose(); };
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
@@ -216,41 +261,19 @@ const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                         <span className="text-3xl">🤔</span>
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">您想要如何处理？</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                        最小化后，倒计时后台继续运行，不会中断提醒。
-                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">最小化后，倒计时后台继续运行，不会中断提醒。</p>
                 </div>
-                
                 <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-100 dark:border-slate-800">
-                    <button 
-                        onClick={handleMinimize}
-                        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
-                    >
-                        最小化到托盘
-                    </button>
-                    <button 
-                        onClick={handleQuit}
-                        className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
-                    >
-                        直接退出
-                    </button>
-                    <button 
-                        onClick={onClose}
-                        className="w-full py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
-                    >
-                        取消
-                    </button>
+                    <button onClick={handleMinimize} className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]">最小化到托盘</button>
+                    <button onClick={handleQuit} className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]">直接退出</button>
+                    <button onClick={onClose} className="w-full py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0">取消</button>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- 独立的通知窗口组件 (Pull Mode) ---
 const StandaloneNotification: React.FC = () => {
-    // ... existing StandaloneNotification code (No changes needed here) ...
-    // To save context tokens, I will render the existing code for StandaloneNotification.
-    // In a real IDE, this would be collapsed.
     const [notificationId, setNotificationId] = useState<string>('');
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
@@ -300,7 +323,7 @@ const StandaloneNotification: React.FC = () => {
 
     const handleDismiss = () => {
         setIsClosing(true);
-        setAnimationKey(prev => prev + 1);
+        // setAnimationKey(prev => prev + 1); // 防止关闭时重新挂载导致动画闪回
         setTimeout(() => { if (ipcRenderer) { ipcRenderer.send('dismiss-notification', { id: notificationId }); } }, 300);
     };
     
@@ -335,7 +358,7 @@ const StandaloneNotification: React.FC = () => {
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             `}</style>
             <div 
-                key={`${isClosing ? 'closing' : 'opening'}-${animationKey}`}
+                key={animationKey} // 仅在数据更新时重置动画，关闭时不重置
                 className={`border rounded-3xl w-full h-full relative flex flex-col outline-none ${isClosing ? 'animate-fade-out' : 'animate-fade-in'} ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}
                 style={{ boxShadow: isDark ? '0 10px 30px rgba(0,0,0,0.6)' : '0 10px 30px rgba(0,0,0,0.2)', cursor: isDragging ? 'grabbing' : 'grab' } as React.CSSProperties}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -406,8 +429,10 @@ const MainView: React.FC = () => {
       updateVersionInfo,
       updateErrorMsg,
       isUpdateModalOpen,
+      isPortableUpdate, // 新增
       closeUpdateModal,
       startDownload,
+      downloadPortable, // 新增
       restartApp,
       skipUpdate
   } = useApp();
@@ -456,8 +481,10 @@ const MainView: React.FC = () => {
           versionInfo={updateVersionInfo || undefined}
           errorMsg={updateErrorMsg}
           progress={updateProgress}
+          isPortable={isPortableUpdate} // Pass portable flag
           onClose={closeUpdateModal}
           onDownload={startDownload}
+          onDownloadPortable={downloadPortable} // Pass handler
           onRestart={restartApp}
           onSkip={skipUpdate}
       />
