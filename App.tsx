@@ -7,6 +7,70 @@ import { NotificationOverlay } from '@/components/NotificationOverlay';
 // Helper to access IPC
 const ipcRenderer = typeof window !== 'undefined' && (window as any).require ? (window as any).require('electron').ipcRenderer : null;
 
+// --- 更新提示模态框组件 ---
+interface UpdateModalProps {
+    isOpen: boolean;
+    status: 'downloaded' | 'error' | null;
+    errorMsg?: string;
+    onClose: () => void;
+    onRestart: () => void;
+}
+
+const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, errorMsg, onClose, onRestart }) => {
+    if (!isOpen || !status) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
+                <div className="p-6 text-center">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${status === 'downloaded' ? 'bg-green-50 dark:bg-green-900/20 text-green-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
+                        {status === 'downloaded' ? (
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                        ) : (
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        )}
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+                        {status === 'downloaded' ? '发现新版本' : '更新出错'}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-4">
+                        {status === 'downloaded' 
+                            ? '新版本已自动下载完毕，重启应用即可生效。是否立即重启？' 
+                            : `检查或下载更新时遇到问题：${errorMsg || '未知错误'}`
+                        }
+                    </p>
+                </div>
+                
+                <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50">
+                    {status === 'downloaded' ? (
+                        <>
+                            <button 
+                                onClick={onRestart}
+                                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
+                            >
+                                立即重启更新
+                            </button>
+                            <button 
+                                onClick={onClose}
+                                className="w-full py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                            >
+                                稍后重启
+                            </button>
+                        </>
+                    ) : (
+                        <button 
+                            onClick={onClose}
+                            className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
+                        >
+                            我知道了
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- 退出确认模态框组件 ---
 const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
@@ -290,16 +354,43 @@ const MainView: React.FC = () => {
   const { status, toggleTimer, timeLeft, totalTime, settings } = useApp();
   const [activeTab, setActiveTab] = useState<'timer' | 'settings'>('timer');
   const [showCloseModal, setShowCloseModal] = useState(false);
+  
+  // Update state
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'downloaded' | 'error' | null>(null);
+  const [updateErrorMsg, setUpdateErrorMsg] = useState('');
 
   useEffect(() => {
       if (ipcRenderer) {
           const closeHandler = () => { setShowCloseModal(true); };
           ipcRenderer.on('show-close-confirm', closeHandler);
+
+          // Update Handlers
+          const updateDownloadedHandler = () => {
+              setUpdateStatus('downloaded');
+              setShowUpdateModal(true);
+          };
+          const updateErrorHandler = (_: any, msg: string) => {
+              setUpdateStatus('error');
+              setUpdateErrorMsg(msg);
+              setShowUpdateModal(true);
+          };
+
+          ipcRenderer.on('update-downloaded', updateDownloadedHandler);
+          ipcRenderer.on('update-error', updateErrorHandler);
+
           return () => { 
               ipcRenderer.removeAllListeners('show-close-confirm');
+              ipcRenderer.removeAllListeners('update-downloaded');
+              ipcRenderer.removeAllListeners('update-error');
           };
       }
   }, []);
+
+  const handleRestartApp = () => {
+      if(ipcRenderer) ipcRenderer.send('restart_app');
+      setShowUpdateModal(false);
+  };
 
   return (
     // Moved background color classes here from index.html to prevent flash
@@ -359,6 +450,13 @@ const MainView: React.FC = () => {
         </div>
       </div>
       <CloseConfirmModal isOpen={showCloseModal} onClose={() => setShowCloseModal(false)} />
+      <UpdateModal 
+          isOpen={showUpdateModal} 
+          status={updateStatus} 
+          errorMsg={updateErrorMsg}
+          onClose={() => setShowUpdateModal(false)}
+          onRestart={handleRestartApp}
+      />
     </div>
   );
 };

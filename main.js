@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 
 // 0. 解决自动播放策略限制 (NotAllowedError)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -11,6 +12,10 @@ if (process.platform === 'win32') {
 
 // 2. 核心机制：阻止系统挂起应用，确保后台计时器精准运行
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
+
+// --- AutoUpdater 配置 ---
+autoUpdater.autoDownload = true; // 自动静默下载
+autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
 
 let mainWindow = null;
 // Use a Map to store multiple notification windows: key=id, value={ win, data, type }
@@ -307,10 +312,34 @@ function createWindow() {
   });
 }
 
+// --- AutoUpdater Events ---
+autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded', info);
+    }
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('Update error:', err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        // Optional: Send error to renderer if you want to show user
+        mainWindow.webContents.send('update-error', err.message);
+    }
+});
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
   
+  // Check for updates on startup
+  if (process.env.NODE_ENV !== 'development') {
+      autoUpdater.checkForUpdates();
+  } else {
+      console.log('Skipping update check in development mode');
+      // Uncomment to test update flow in dev (might fail without signing)
+      // autoUpdater.checkForUpdates(); 
+  }
+
   // Listen for screen changes to keep notifications in place
   screen.on('display-metrics-changed', () => {
       repositionAllNotifications();
@@ -407,4 +436,9 @@ ipcMain.on('confirm-minimize', () => {
 ipcMain.on('confirm-quit', () => {
     isQuitting = true;
     app.quit();
+});
+
+// Restart App after update
+ipcMain.on('restart_app', () => {
+    autoUpdater.quitAndInstall();
 });
