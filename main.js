@@ -14,7 +14,8 @@ if (process.platform === 'win32') {
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
 
 // --- AutoUpdater 配置 ---
-autoUpdater.autoDownload = false; // 手动下载
+autoUpdater.autoDownload = false; // 保持 false，我们在代码里手动触发下载，以便区分 Portable
+autoUpdater.autoInstallOnAppQuit = true; // 【核心】退出应用时自动安装更新
 autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
 autoUpdater.disableWebInstaller = true; 
 autoUpdater.allowDowngrade = false;
@@ -233,7 +234,6 @@ function updateWindowPosition(win, type) {
     }
 }
 
-// FIX: Add try-catch and safer checks to prevent crash on exit
 function handleWindowDismiss(id) {
     try {
         const entry = notificationWindows.get(id);
@@ -242,7 +242,6 @@ function handleWindowDismiss(id) {
             entry.win.setOpacity(0); 
         }
         
-        // Only notify main window if it exists and is valid
         if (mainWindow && !mainWindow.isDestroyed()) {
              mainWindow.webContents.send('notification-closed', id);
              if (!hasVisibleNotifications()) {
@@ -291,44 +290,43 @@ autoUpdater.on('update-available', (info) => {
     const isPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
 
     if (isPortable) {
-        // If Portable, show dialog and open browser, do NOT tell renderer to update
+        // 便携版：弹窗引导去浏览器下载
         dialog.showMessageBox(mainWindow, {
             type: 'info',
             title: '发现新版本',
-            message: `检测到新版本 v${info.version}。\n由于您使用的是便携版(Portable)，无法自动覆盖更新。\n请前往浏览器下载最新版本。`,
+            message: `检测到新版本 v${info.version}。\n便携版(Portable)无法自动覆盖更新，请前往下载最新版本。`,
             buttons: ['去下载', '取消'],
             defaultId: 0,
             cancelId: 1
         }).then(({ response }) => {
             if (response === 0) {
-                // Open Release Page (Replace with your actual repo URL if needed, or let electron-updater logic handle if possible, but manual link is safest)
-                // Assuming package.json has repository info, but hardcoding provided structure:
                 shell.openExternal('https://github.com/MrC0824/Reminder-AI/releases/latest');
             }
         });
-        return; // STOP here for portable
+    } else {
+        // 安装版：直接开始后台静默下载，不打扰用户
+        console.log('Update available, starting silent download...');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-available', info); // 可选：通知前端显示个小红点
+        }
+        autoUpdater.downloadUpdate().catch(e => console.error('Silent download failed:', e));
     }
-
-    // 2. If Setup/Installed version, proceed with normal flow
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-available', info);
-    }
-});
-
-autoUpdater.on('update-not-available', () => {
-    console.log('Update not available');
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
+    // 转发进度给前端（Settings面板可以显示）
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('download-progress', progressObj.percent);
     }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
+    // 下载完成，准备就绪
+    console.log('Update downloaded. Ready to install on quit.');
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
     }
+    // 注意：这里不调用 quitAndInstall，依赖 autoInstallOnAppQuit = true
 });
 
 autoUpdater.on('error', (err) => {
@@ -343,7 +341,6 @@ app.whenReady().then(() => {
   createTray();
   
   if (process.env.NODE_ENV !== 'development') {
-      // Check for updates shortly after startup
       setTimeout(() => {
           autoUpdater.checkForUpdates().catch(e => console.error("Check for updates failed:", e));
       }, 3000);
@@ -431,7 +428,6 @@ ipcMain.on('confirm-quit', () => {
 });
 
 ipcMain.on('start-download', () => {
-    // FIX: Catch download errors to prevent unhandled rejection crashes
     autoUpdater.downloadUpdate().catch(e => {
         console.error("Download failed:", e);
         if (mainWindow && !mainWindow.isDestroyed()) {
