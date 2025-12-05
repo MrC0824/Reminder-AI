@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType } from '@/types';
+import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
 import { saveAudioFile, getAudioFile, deleteAudioFile } from '@/utils/audioStorage';
 
@@ -43,6 +43,17 @@ interface AppContextType {
   showNotification: boolean;
   notificationTitle: string;
   notificationMessage: string;
+  
+  // Update related
+  updateStatus: UpdateStatus;
+  updateProgress: number;
+  updateVersionInfo: UpdateInfo | null;
+  updateErrorMsg: string;
+  isUpdateModalOpen: boolean;
+  closeUpdateModal: () => void;
+  startDownload: () => void;
+  restartApp: () => void;
+  skipUpdate: (version: string) => void;
 }
 
 const SYSTEM_SOUND_ID = 'system_default';
@@ -104,6 +115,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [status, setStatus] = useState<AppStatus>('idle');
   
+  // Update State
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateVersionInfo, setUpdateVersionInfo] = useState<UpdateInfo | null>(null);
+  const [updateErrorMsg, setUpdateErrorMsg] = useState('');
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [skippedVersions, setSkippedVersions] = useState<string[]>(() => {
+      const saved = localStorage.getItem('skipped_versions');
+      return saved ? JSON.parse(saved) : [];
+  });
+
   const calculateTotalSeconds = useCallback((val?: number, unit?: string) => {
     const v = val ?? settings.intervalValue;
     const u = unit ?? settings.intervalUnit;
@@ -133,6 +155,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const prevActiveHoursEnabled = useRef(settings.activeHoursEnabled);
   const prevRemindersRef = useRef(settings.customReminders);
+
+  // Update Logic Effects
+  useEffect(() => {
+    if (!ipcRenderer || isNotificationMode) return;
+
+    const onUpdateAvailable = (_: any, info: UpdateInfo) => {
+        if (skippedVersions.includes(info.version)) return;
+        setUpdateVersionInfo(info);
+        setUpdateStatus('available');
+        setIsUpdateModalOpen(true);
+    };
+
+    const onDownloadProgress = (_: any, progress: number) => {
+        setUpdateStatus('downloading');
+        setUpdateProgress(progress);
+        if (!isUpdateModalOpen) setIsUpdateModalOpen(true);
+    };
+
+    const onUpdateDownloaded = (_: any, info: UpdateInfo) => {
+        setUpdateStatus('downloaded');
+        setUpdateProgress(100);
+        setIsUpdateModalOpen(true);
+    };
+
+    const onUpdateError = (_: any, message: string) => {
+        setUpdateStatus('error');
+        setUpdateErrorMsg(message);
+        setIsUpdateModalOpen(true);
+    };
+
+    ipcRenderer.on('update-available', onUpdateAvailable);
+    ipcRenderer.on('download-progress', onDownloadProgress);
+    ipcRenderer.on('update-downloaded', onUpdateDownloaded);
+    ipcRenderer.on('update-error', onUpdateError);
+
+    return () => {
+        ipcRenderer.removeListener('update-available', onUpdateAvailable);
+        ipcRenderer.removeListener('download-progress', onDownloadProgress);
+        ipcRenderer.removeListener('update-downloaded', onUpdateDownloaded);
+        ipcRenderer.removeListener('update-error', onUpdateError);
+    };
+  }, [skippedVersions]);
+
+  const closeUpdateModal = () => setIsUpdateModalOpen(false);
+  
+  const startDownload = () => {
+      if (ipcRenderer) ipcRenderer.send('start-download');
+  };
+
+  const restartApp = () => {
+      if (ipcRenderer) ipcRenderer.send('restart_app');
+  };
+
+  const skipUpdate = (version: string) => {
+      const newSkipped = [...skippedVersions, version];
+      setSkippedVersions(newSkipped);
+      localStorage.setItem('skipped_versions', JSON.stringify(newSkipped));
+      setIsUpdateModalOpen(false);
+  };
 
   useEffect(() => {
       // FIX: Do not initialize audio in notification window to prevent duplicate sound
@@ -348,9 +429,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             theme: settings.theme 
         });
     }
-
-    // Audio is NOT played here anymore to avoid sync issues. 
-    // It listens for 'play-alarm' event from main process.
     return true;
   }, [settings, stopPreviewAudio]);
 
@@ -723,7 +801,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         stopPreviewAudio,
         previewingId,
         isMiniMode: settings.isMiniMode,
-        toggleMiniMode
+        toggleMiniMode,
+        // Update related
+        updateStatus,
+        updateProgress,
+        updateVersionInfo,
+        updateErrorMsg,
+        isUpdateModalOpen,
+        closeUpdateModal,
+        startDownload,
+        restartApp,
+        skipUpdate,
       }}
     >
       {children}

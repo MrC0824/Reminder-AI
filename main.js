@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen } = require('electron');
+const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -14,14 +14,13 @@ if (process.platform === 'win32') {
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
 
 // --- AutoUpdater 配置 ---
-autoUpdater.autoDownload = false; // 改为 false，由用户决定是否下载
+autoUpdater.autoDownload = false; // 手动下载
 autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
-// 规避 "retry is not a function" 错误的常见配置
 autoUpdater.disableWebInstaller = true; 
 autoUpdater.allowDowngrade = false;
 autoUpdater.fullChangelog = true;
 
-// 设置日志 (可选，方便调试)
+// 设置日志
 // autoUpdater.logger = require("electron-log");
 // autoUpdater.logger.transports.file.level = "info";
 
@@ -36,9 +35,8 @@ const notificationPositions = {
     onetime: null
 };
 
-/* ... (省略中间未变动的代码，如 getIconPath, createTray, repositionAllNotifications, createOrUpdateNotificationWindow 等) ... */
-// 为了节省篇幅，这里保留原有逻辑，仅在 AutoUpdater Events 部分做修改
-// 请确保 updateWindowPosition, handleWindowDismiss, createWindow 等函数保持原样
+let tray = null;
+let isQuitting = false;
 
 // 获取图标路径 helper
 function getIconPath() {
@@ -235,17 +233,24 @@ function updateWindowPosition(win, type) {
     }
 }
 
+// FIX: Add try-catch and safer checks to prevent crash on exit
 function handleWindowDismiss(id) {
-    const entry = notificationWindows.get(id);
-    if (entry && entry.win && !entry.win.isDestroyed()) {
-        entry.win.hide(); 
-        entry.win.setOpacity(0); 
-    }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-         mainWindow.webContents.send('notification-closed', id);
-         if (!hasVisibleNotifications()) {
-             mainWindow.webContents.send('stop-alarm');
-         }
+    try {
+        const entry = notificationWindows.get(id);
+        if (entry && entry.win && !entry.win.isDestroyed()) {
+            entry.win.hide(); 
+            entry.win.setOpacity(0); 
+        }
+        
+        // Only notify main window if it exists and is valid
+        if (mainWindow && !mainWindow.isDestroyed()) {
+             mainWindow.webContents.send('notification-closed', id);
+             if (!hasVisibleNotifications()) {
+                 mainWindow.webContents.send('stop-alarm');
+             }
+        }
+    } catch (error) {
+        console.error("Error in handleWindowDismiss:", error);
     }
 }
 
@@ -281,28 +286,51 @@ function createWindow() {
 
 // --- AutoUpdater Events ---
 
-// 1. 发现新版本（由 autoDownload=false 触发）
 autoUpdater.on('update-available', (info) => {
+    // 1. Detect if running as Portable
+    const isPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
+
+    if (isPortable) {
+        // If Portable, show dialog and open browser, do NOT tell renderer to update
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: '发现新版本',
+            message: `检测到新版本 v${info.version}。\n由于您使用的是便携版(Portable)，无法自动覆盖更新。\n请前往浏览器下载最新版本。`,
+            buttons: ['去下载', '取消'],
+            defaultId: 0,
+            cancelId: 1
+        }).then(({ response }) => {
+            if (response === 0) {
+                // Open Release Page (Replace with your actual repo URL if needed, or let electron-updater logic handle if possible, but manual link is safest)
+                // Assuming package.json has repository info, but hardcoding provided structure:
+                shell.openExternal('https://github.com/MrC0824/Reminder-AI/releases/latest');
+            }
+        });
+        return; // STOP here for portable
+    }
+
+    // 2. If Setup/Installed version, proceed with normal flow
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', info);
     }
 });
 
-// 2. 下载进度 (新增)
+autoUpdater.on('update-not-available', () => {
+    console.log('Update not available');
+});
+
 autoUpdater.on('download-progress', (progressObj) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('download-progress', progressObj.percent);
     }
 });
 
-// 3. 下载完毕
 autoUpdater.on('update-downloaded', (info) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
     }
 });
 
-// 4. 错误
 autoUpdater.on('error', (err) => {
     console.error('Update error:', err);
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -315,7 +343,10 @@ app.whenReady().then(() => {
   createTray();
   
   if (process.env.NODE_ENV !== 'development') {
-      autoUpdater.checkForUpdates();
+      // Check for updates shortly after startup
+      setTimeout(() => {
+          autoUpdater.checkForUpdates().catch(e => console.error("Check for updates failed:", e));
+      }, 3000);
   } else {
       console.log('Skipping update check in development mode');
   }
@@ -400,7 +431,13 @@ ipcMain.on('confirm-quit', () => {
 });
 
 ipcMain.on('start-download', () => {
-    autoUpdater.downloadUpdate();
+    // FIX: Catch download errors to prevent unhandled rejection crashes
+    autoUpdater.downloadUpdate().catch(e => {
+        console.error("Download failed:", e);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-error', e.message);
+        }
+    });
 });
 
 ipcMain.on('restart_app', () => {

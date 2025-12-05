@@ -60,3 +60,11 @@ export interface AppSettings {
 }
 
 export type AppStatus = 'idle' | 'running' | 'paused' | 'waiting' | 'alert_active';
+
+// --- Update Related Types ---
+export type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'error' | null;
+
+export interface UpdateInfo {
+    version: string;
+    releaseNotes?: string | Array<{ note: string }>;
+}

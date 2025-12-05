@@ -71,8 +71,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
             return (
                 <div className="mt-2 text-left w-full">
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">检测到新版本，是否立即更新？</p>
-                    {cleanNotes && (
-                        <div className="bg-gray-50 dark:bg-slate-900/50 rounded-xl p-4 max-h-40 overflow-y-auto custom-scrollbar">
+                    {cleanNotes && cleanNotes.trim() !== '' && (
+                        <div className="bg-white border border-gray-100 dark:bg-slate-900 dark:border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
                              <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans break-words leading-relaxed">
                                 {cleanNotes}
                              </div>
@@ -85,16 +85,19 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, 
             const pct = Math.round(progress || 0);
             return (
                 <div className="w-full mt-4 px-2">
-                    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 mb-2 overflow-hidden">
+                    <div className="flex justify-between mb-1">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400">下载中</span>
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400">{pct}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
                         <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono text-center">{pct}%</p>
                 </div>
             );
         }
         if (status === 'downloaded') {
             return (
-                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-2 mt-2">
+                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-2 mt-2 text-center">
                     新版本已下载完毕，重启应用即可生效。
                 </p>
             );
@@ -206,7 +209,7 @@ const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
                 <div className="p-6 text-center">
                     <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -391,83 +394,36 @@ const StandaloneNotification: React.FC = () => {
 
 // --- 主界面组件 ---
 const MainView: React.FC = () => {
-  const { status, toggleTimer, timeLeft, totalTime, settings } = useApp();
+  const { 
+      status, 
+      toggleTimer, 
+      timeLeft, 
+      totalTime, 
+      settings,
+      // Update Context
+      updateStatus,
+      updateProgress,
+      updateVersionInfo,
+      updateErrorMsg,
+      isUpdateModalOpen,
+      closeUpdateModal,
+      startDownload,
+      restartApp,
+      skipUpdate
+  } = useApp();
   const [activeTab, setActiveTab] = useState<'timer' | 'settings'>('timer');
   const [showCloseModal, setShowCloseModal] = useState(false);
-  
-  // Update state
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<'available' | 'downloading' | 'downloaded' | 'error' | null>(null);
-  const [updateErrorMsg, setUpdateErrorMsg] = useState('');
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [versionInfo, setVersionInfo] = useState<any>(null);
 
   useEffect(() => {
       if (ipcRenderer) {
           const closeHandler = () => { setShowCloseModal(true); };
           ipcRenderer.on('show-close-confirm', closeHandler);
-
-          // Update Handlers
-          const updateAvailableHandler = (_: any, info: any) => {
-              const skippedVersion = localStorage.getItem('skipped_version');
-              if (skippedVersion !== info.version) {
-                  setVersionInfo(info);
-                  setUpdateStatus('available');
-                  setShowUpdateModal(true);
-              }
-          };
-
-          const updateProgressHandler = (_: any, progress: number) => {
-              setUpdateStatus('downloading');
-              setDownloadProgress(progress);
-              setShowUpdateModal(true); // Ensure modal stays open
-          };
-
-          const updateDownloadedHandler = () => {
-              setUpdateStatus('downloaded');
-              setShowUpdateModal(true);
-          };
-
-          const updateErrorHandler = (_: any, msg: string) => {
-              setUpdateStatus('error');
-              setUpdateErrorMsg(msg);
-              setShowUpdateModal(true);
-          };
-
-          ipcRenderer.on('update-available', updateAvailableHandler);
-          ipcRenderer.on('download-progress', updateProgressHandler);
-          ipcRenderer.on('update-downloaded', updateDownloadedHandler);
-          ipcRenderer.on('update-error', updateErrorHandler);
-
           return () => { 
               ipcRenderer.removeAllListeners('show-close-confirm');
-              ipcRenderer.removeAllListeners('update-available');
-              ipcRenderer.removeAllListeners('download-progress');
-              ipcRenderer.removeAllListeners('update-downloaded');
-              ipcRenderer.removeAllListeners('update-error');
           };
       }
   }, []);
 
-  const handleStartDownload = () => {
-      if(ipcRenderer) {
-          ipcRenderer.send('start-download');
-          setUpdateStatus('downloading'); 
-          // Do NOT close modal here, let it show progress
-      }
-  };
-
-  const handleRestartApp = () => {
-      if(ipcRenderer) ipcRenderer.send('restart_app');
-      setShowUpdateModal(false);
-  };
-
-  const handleSkipVersion = (version: string) => {
-      localStorage.setItem('skipped_version', version);
-      setShowUpdateModal(false);
-  };
-
-  // ... (Remainder of MainView JSX, no changes needed for buttons/layout logic) ...
   return (
     <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-300 bg-gray-50 text-slate-900 dark:bg-[#0f172a] dark:text-e2e8f0">
       <div className="max-w-5xl w-full h-[90vh] md:h-[85vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-gray-200 dark:border-slate-800 flex flex-col md:flex-row transition-all duration-300">
@@ -492,18 +448,22 @@ const MainView: React.FC = () => {
            {!ipcRenderer && <NotificationOverlay />}
         </div>
       </div>
-      <CloseConfirmModal isOpen={showCloseModal} onClose={() => setShowCloseModal(false)} />
+      
+      {/* Moved UpdateModal to use Context values */}
       <UpdateModal 
-          isOpen={showUpdateModal} 
+          isOpen={isUpdateModalOpen} 
           status={updateStatus} 
-          versionInfo={versionInfo}
+          versionInfo={updateVersionInfo || undefined}
           errorMsg={updateErrorMsg}
-          progress={downloadProgress}
-          onClose={() => setShowUpdateModal(false)}
-          onDownload={handleStartDownload}
-          onRestart={handleRestartApp}
-          onSkip={handleSkipVersion}
+          progress={updateProgress}
+          onClose={closeUpdateModal}
+          onDownload={startDownload}
+          onRestart={restartApp}
+          onSkip={skipUpdate}
       />
+      
+      {/* Z-Index raised to 200 */}
+      <CloseConfirmModal isOpen={showCloseModal} onClose={() => setShowCloseModal(false)} />
     </div>
   );
 };
