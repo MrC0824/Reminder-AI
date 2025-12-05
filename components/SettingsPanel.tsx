@@ -2,6 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
 import { CustomReminder, IntervalUnit, ReminderType, AppSettings, WorkMode } from '@/types';
+// Import package.json to get version dynamically
+import pkg from '@/package.json';
 
 // Helper to get current local time in ISO format for input min attribute
 const getCurrentLocalISO = () => {
@@ -243,7 +245,7 @@ const SettingsPanel: React.FC = () => {
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <span>⚙️</span> 参数配置
             </h2>
-            <span className="text-xs text-slate-400 font-mono bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">v1.0.0</span>
+            <span className="text-xs text-slate-400 font-mono bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">v{pkg.version}</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">
@@ -454,7 +456,7 @@ const SettingsPanel: React.FC = () => {
                                     onChange={(e) => setNewReminderDateTime(e.target.value)}
                                     onFocus={handleDateFocus}
                                     min={minDateTime}
-                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light' }}
+                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light', accentColor: '#2563eb' }}
                                     className="flex-1 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-white"
                             />
                             <button 
@@ -554,7 +556,7 @@ const SettingsPanel: React.FC = () => {
                                     type="time"
                                     value={range.start}
                                     onChange={(e) => updateTimeRange(range.id, 'start', e.target.value)}
-                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light' }}
+                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light', accentColor: '#2563eb' }}
                                     className="w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:border-blue-500"
                                 />
                             </div>
@@ -565,7 +567,7 @@ const SettingsPanel: React.FC = () => {
                                     type="time"
                                     value={range.end}
                                     onChange={(e) => updateTimeRange(range.id, 'end', e.target.value)}
-                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light' }}
+                                    style={{ colorScheme: settings.theme === 'dark' ? 'dark' : 'light', accentColor: '#2563eb' }}
                                     className="w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:border-blue-500"
                                 />
                             </div>

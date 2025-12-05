@@ -1,6 +1,6 @@
 {
   "name": "sedentary-reminder-app",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "提醒助手",
   "main": "main.js",
   "scripts": {
@@ -17,6 +17,7 @@
   "author": "Gemini",
   "license": "ISC",
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -37,6 +38,13 @@
     "compression": "store",
     "asar": true,
     "icon": "public/icon.ico",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "MrC0824",
+        "repo": "Reminder-AI"
+      }
+    ],
     "directories": {
       "output": "release",
       "buildResources": "public"
@@ -60,8 +68,7 @@
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
-      "artifactName": "${productName}_Setup.exe",
-      "differentialPackage": false
+      "artifactName": "${productName}_Setup.exe"
     }
   }
 }

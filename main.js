@@ -16,6 +16,9 @@ const powerId = powerSaveBlocker.start('prevent-app-suspension');
 // --- AutoUpdater 配置 ---
 autoUpdater.autoDownload = true; // 自动静默下载
 autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
+// 设置日志 (可选，方便调试)
+// autoUpdater.logger = require("electron-log");
+// autoUpdater.logger.transports.file.level = "info";
 
 let mainWindow = null;
 // Use a Map to store multiple notification windows: key=id, value={ win, data, type }
@@ -322,7 +325,6 @@ autoUpdater.on('update-downloaded', (info) => {
 autoUpdater.on('error', (err) => {
     console.error('Update error:', err);
     if (mainWindow && !mainWindow.isDestroyed()) {
-        // Optional: Send error to renderer if you want to show user
         mainWindow.webContents.send('update-error', err.message);
     }
 });

@@ -20,28 +20,37 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, errorMsg, onC
     if (!isOpen || !status) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
-                <div className="p-6 text-center">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${status === 'downloaded' ? 'bg-green-50 dark:bg-green-900/20 text-green-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all flex flex-col max-h-[90vh]">
+                <div className="p-6 text-center flex-1 overflow-y-auto custom-scrollbar">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shrink-0 ${status === 'downloaded' ? 'bg-green-50 dark:bg-green-900/20 text-green-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
                         {status === 'downloaded' ? (
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                         ) : (
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         )}
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 shrink-0">
                         {status === 'downloaded' ? '发现新版本' : '更新出错'}
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-4">
-                        {status === 'downloaded' 
-                            ? '新版本已自动下载完毕，重启应用即可生效。是否立即重启？' 
-                            : `检查或下载更新时遇到问题：${errorMsg || '未知错误'}`
-                        }
-                    </p>
+                    
+                    {status === 'downloaded' ? (
+                         <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-2">
+                            新版本已自动下载完毕，重启应用即可生效。是否立即重启？
+                        </p>
+                    ) : (
+                        <div className="mt-2 text-left bg-red-50 dark:bg-red-900/10 rounded-lg p-3 border border-red-100 dark:border-red-900/20">
+                            <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-1">错误详情：</p>
+                            <div className="max-h-32 overflow-y-auto custom-scrollbar">
+                                <p className="text-[10px] font-mono text-slate-600 dark:text-slate-400 break-all whitespace-pre-wrap">
+                                    {errorMsg || '未知错误'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 
-                <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50">
+                <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50 shrink-0 border-t border-gray-100 dark:border-slate-800">
                     {status === 'downloaded' ? (
                         <>
                             <button 
@@ -86,8 +95,8 @@ const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all">
                 <div className="p-6 text-center">
                     <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-3xl">🤔</span>
@@ -98,7 +107,7 @@ const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                     </p>
                 </div>
                 
-                <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50">
+                <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-100 dark:border-slate-800">
                     <button 
                         onClick={handleMinimize}
                         className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
