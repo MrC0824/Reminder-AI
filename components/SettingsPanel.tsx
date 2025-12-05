@@ -2,8 +2,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
 import { CustomReminder, IntervalUnit, ReminderType, AppSettings, WorkMode } from '@/types';
-// Import package.json to get version dynamically
-import pkg from '@/package.json';
+
+// Helper to access IPC
+const ipcRenderer = typeof window !== 'undefined' && (window as any).require ? (window as any).require('electron').ipcRenderer : null;
 
 // Helper to get current local time in ISO format for input min attribute
 const getCurrentLocalISO = () => {
@@ -21,8 +22,8 @@ const SettingsPanel: React.FC = () => {
       settings, 
       updateSettings, 
       handleAudioUpload, 
-      deleteCustomAudio,
-      selectAudio,
+      deleteCustomAudio, 
+      selectAudio, 
       previewAudio, 
       stopPreviewAudio, 
       previewingId,
@@ -39,6 +40,7 @@ const SettingsPanel: React.FC = () => {
   const [newReminderDateTime, setNewReminderDateTime] = useState('');
   const [minDateTime, setMinDateTime] = useState(getCurrentLocalISO);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState('1.0.2');
 
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -56,6 +58,15 @@ const SettingsPanel: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => { setMinDateTime(getCurrentLocalISO()); }, 60000); 
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch version from main process
+  useEffect(() => {
+      if (ipcRenderer) {
+          ipcRenderer.invoke('get-app-version')
+            .then((ver: string) => setAppVersion(ver))
+            .catch((err: any) => console.warn('Failed to get app version:', err));
+      }
   }, []);
   
   const handleDateFocus = () => { setMinDateTime(getCurrentLocalISO()); };
@@ -245,7 +256,7 @@ const SettingsPanel: React.FC = () => {
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <span>⚙️</span> 参数配置
             </h2>
-            <span className="text-xs text-slate-400 font-mono bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">v{pkg.version}</span>
+            <span className="text-xs text-slate-400 font-mono bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">v{appVersion}</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">

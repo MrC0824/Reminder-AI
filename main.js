@@ -14,8 +14,13 @@ if (process.platform === 'win32') {
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
 
 // --- AutoUpdater 配置 ---
-autoUpdater.autoDownload = true; // 自动静默下载
+autoUpdater.autoDownload = false; // 改为 false，由用户决定是否下载
 autoUpdater.verifyUpdateCodeSignature = false; // 防止开发环境报错
+// 规避 "retry is not a function" 错误的常见配置
+autoUpdater.disableWebInstaller = true; 
+autoUpdater.allowDowngrade = false;
+autoUpdater.fullChangelog = true;
+
 // 设置日志 (可选，方便调试)
 // autoUpdater.logger = require("electron-log");
 // autoUpdater.logger.transports.file.level = "info";
@@ -31,8 +36,9 @@ const notificationPositions = {
     onetime: null
 };
 
-let tray = null;
-let isQuitting = false;
+/* ... (省略中间未变动的代码，如 getIconPath, createTray, repositionAllNotifications, createOrUpdateNotificationWindow 等) ... */
+// 为了节省篇幅，这里保留原有逻辑，仅在 AutoUpdater Events 部分做修改
+// 请确保 updateWindowPosition, handleWindowDismiss, createWindow 等函数保持原样
 
 // 获取图标路径 helper
 function getIconPath() {
@@ -75,8 +81,6 @@ function createTray() {
   });
 }
 
-// Helper to reposition all active notification windows to bottom-right
-// Only used when screen metrics change
 function repositionAllNotifications() {
     try {
         const primaryDisplay = screen.getPrimaryDisplay();
@@ -90,16 +94,12 @@ function repositionAllNotifications() {
             if (entry.win && !entry.win.isDestroyed() && entry.win.isVisible()) {
                 const type = entry.type || 'main';
                 let x, y;
-
-                // Check if we have a saved position for THIS specific type
                 const savedPos = notificationPositions[type];
 
                 if (savedPos) {
-                    // Validate saved position against current work area
                     x = Math.min(Math.max(workArea.x, savedPos.x), workArea.x + workArea.width - WIN_WIDTH);
                     y = Math.min(Math.max(workArea.y, savedPos.y), workArea.y + workArea.height - WIN_HEIGHT);
                 } else {
-                    // Default bottom right
                     const stackOffset = index * 10;
                     x = workArea.x + workArea.width - WIN_WIDTH - padding - stackOffset;
                     y = workArea.y + workArea.height - WIN_HEIGHT - padding - stackOffset;
@@ -114,7 +114,6 @@ function repositionAllNotifications() {
     }
 }
 
-// Helper: Check if any notification window is currently visible
 function hasVisibleNotifications() {
     for (const [_, entry] of notificationWindows) {
         if (entry.win && !entry.win.isDestroyed() && entry.win.isVisible()) {
@@ -124,35 +123,23 @@ function hasVisibleNotifications() {
     return false;
 }
 
-// Helper to create or reuse a specific notification window
 function createOrUpdateNotificationWindow(id, data) {
     let entry = notificationWindows.get(id);
 
-    // Reuse existing window
     if (entry && !entry.win.isDestroyed()) {
-        entry.data = data; // Update stored data
-        entry.type = data.type || 'main'; // Update type
+        entry.data = data; 
+        entry.type = data.type || 'main'; 
         
-        // 1. Set Opacity 0 to hide any potential "flash" of old content or window frame artifacts
         entry.win.setOpacity(0);
-        
-        // 2. Send new data to React
         entry.win.webContents.send('notification-data-response', data);
-        
-        // 3. Show the window (still invisible due to opacity 0)
-        // This forces the DWM to compose the window surface
         entry.win.show();
-        entry.win.restore(); // Ensure it's not minimized
+        entry.win.restore(); 
         
-        // 4. Position Logic (Update position in case it was moved or type changed)
         updateWindowPosition(entry.win, entry.type);
 
-        // 5. Fade in / Reveal after a short delay to allow rendering to settle
-        // This eliminates the "blink" effect
         setTimeout(() => {
             if (!entry.win.isDestroyed()) {
                 entry.win.setOpacity(1);
-                // Signal main window to play sound AFTER visual is ready
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('play-alarm');
                 }
@@ -161,7 +148,6 @@ function createOrUpdateNotificationWindow(id, data) {
 
         return;
     } else {
-        // Clean up invalid entry if any
         notificationWindows.delete(id);
     }
 
@@ -169,32 +155,28 @@ function createOrUpdateNotificationWindow(id, data) {
     const WIN_HEIGHT = 360;
     const type = data.type || 'main';
 
-    // Create new window
     const win = new BrowserWindow({
         width: WIN_WIDTH,
         height: WIN_HEIGHT,
         frame: false,
         transparent: true,
-        backgroundColor: '#00000000', // Explicitly transparent
-        hasShadow: false, // CRITICAL: Disable system shadow to prevent artifacts/flickering
+        backgroundColor: '#00000000',
+        hasShadow: false, 
         alwaysOnTop: true,
         skipTaskbar: true,
         resizable: false,
         minimizable: false,
         maximizable: false,
-        show: false, // Don't show until ready
+        show: false, 
         icon: getIconPath(),
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
-            backgroundThrottling: false // IMPORTANT: Prevent animations from freezing when hidden
+            backgroundThrottling: false 
         }
     });
 
-    // Store window and data in map with TYPE
     notificationWindows.set(id, { win, data, type });
-
-    // Initial Positioning Logic
     updateWindowPosition(win, type);
 
     const searchParams = `mode=notification&id=${id}`;
@@ -206,14 +188,12 @@ function createOrUpdateNotificationWindow(id, data) {
     }
 
     win.once('ready-to-show', () => {
-        // Same opacity trick for initial show
         win.setOpacity(0);
         win.show();
         
         setTimeout(() => {
             if (!win.isDestroyed()) {
                 win.setOpacity(1);
-                 // Signal main window to play sound
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('play-alarm');
                 }
@@ -223,7 +203,6 @@ function createOrUpdateNotificationWindow(id, data) {
 
     win.on('close', (event) => {
         if (isQuitting) return;
-        // If user manually closes via Alt+F4 (rare since frame is false), treat as dismiss
         event.preventDefault();
         handleWindowDismiss(id);
     });
@@ -236,31 +215,20 @@ function updateWindowPosition(win, type) {
         const WIN_WIDTH = 420;
         const WIN_HEIGHT = 360;
         const padding = 0;
-        
         let x, y;
-
-        // Retrieve saved position for this SPECIFIC type
         const savedPos = notificationPositions[type];
 
         if (savedPos) {
             x = savedPos.x;
             y = savedPos.y;
-
-            // Clamp X
             if (x < workArea.x) x = workArea.x;
             if (x + WIN_WIDTH > workArea.x + workArea.width) x = workArea.x + workArea.width - WIN_WIDTH;
-
-            // Clamp Y
             if (y < workArea.y) y = workArea.y;
             if (y + WIN_HEIGHT > workArea.y + workArea.height) y = workArea.y + workArea.height - WIN_HEIGHT;
-
         } else {
-            // Default: Bottom Right
-            // We don't stack offset here for simplicity in 'type' mode, or could base on visible count
             x = workArea.x + workArea.width - WIN_WIDTH - padding;
             y = workArea.y + workArea.height - WIN_HEIGHT - padding;
         }
-        
         win.setPosition(Math.round(x), Math.round(y));
     } catch (e) {
         console.error("Failed to set position", e);
@@ -270,15 +238,11 @@ function updateWindowPosition(win, type) {
 function handleWindowDismiss(id) {
     const entry = notificationWindows.get(id);
     if (entry && entry.win && !entry.win.isDestroyed()) {
-        entry.win.hide(); // HIDE instead of destroy to reuse
-        entry.win.setOpacity(0); // Reset opacity for next reveal
+        entry.win.hide(); 
+        entry.win.setOpacity(0); 
     }
-
-    // Notify main window that this ID is closed
     if (mainWindow && !mainWindow.isDestroyed()) {
          mainWindow.webContents.send('notification-closed', id);
-         
-         // If no more VISIBLE notifications, stop alarm
          if (!hasVisibleNotifications()) {
              mainWindow.webContents.send('stop-alarm');
          }
@@ -316,12 +280,29 @@ function createWindow() {
 }
 
 // --- AutoUpdater Events ---
+
+// 1. 发现新版本（由 autoDownload=false 触发）
+autoUpdater.on('update-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', info);
+    }
+});
+
+// 2. 下载进度 (新增)
+autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-progress', progressObj.percent);
+    }
+});
+
+// 3. 下载完毕
 autoUpdater.on('update-downloaded', (info) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
     }
 });
 
+// 4. 错误
 autoUpdater.on('error', (err) => {
     console.error('Update error:', err);
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -333,25 +314,15 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
-  // Check for updates on startup
   if (process.env.NODE_ENV !== 'development') {
       autoUpdater.checkForUpdates();
   } else {
       console.log('Skipping update check in development mode');
-      // Uncomment to test update flow in dev (might fail without signing)
-      // autoUpdater.checkForUpdates(); 
   }
 
-  // Listen for screen changes to keep notifications in place
-  screen.on('display-metrics-changed', () => {
-      repositionAllNotifications();
-  });
-  screen.on('work-area-added', () => {
-      repositionAllNotifications();
-  });
-  screen.on('work-area-removed', () => {
-      repositionAllNotifications();
-  });
+  screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
+  screen.on('work-area-added', () => { repositionAllNotifications(); });
+  screen.on('work-area-removed', () => { repositionAllNotifications(); });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -367,17 +338,13 @@ app.on('window-all-closed', () => {
 // --- IPC Communication ---
 
 ipcMain.on('resize-window', (event, { width, height }) => {
-  if (mainWindow) {
-    mainWindow.setSize(width, height);
-  }
+  if (mainWindow) mainWindow.setSize(width, height);
 });
 
-// TRIGGER: Create or Reuse window for this alert ID
 ipcMain.on('trigger-notification', (event, data) => {
     createOrUpdateNotificationWindow(data.id, data);
 });
 
-// PULL DATA: Renderer asks for data based on ID
 ipcMain.on('request-notification-data', (event, id) => {
     const entry = notificationWindows.get(id);
     if (entry && entry.data) {
@@ -385,16 +352,12 @@ ipcMain.on('request-notification-data', (event, id) => {
     }
 });
 
-// DISMISS: Hide specific window by ID
 ipcMain.on('dismiss-notification', (event, { id }) => {
     handleWindowDismiss(id);
 });
 
-// Custom window move handler
 ipcMain.on('window-move', (event, { x, y }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    
-    // Find which notification window this is
     let currentId = null;
     let currentType = 'main';
 
@@ -411,19 +374,15 @@ ipcMain.on('window-move', (event, { x, y }) => {
         const { workArea } = currentDisplay;
         const [winWidth, winHeight] = win.getSize();
 
-        // Clamp values
         let newX = Math.round(x);
         let newY = Math.round(y);
 
         if (newX < workArea.x) newX = workArea.x;
         if (newX + winWidth > workArea.x + workArea.width) newX = workArea.x + workArea.width - winWidth;
-
         if (newY < workArea.y) newY = workArea.y;
         if (newY + winHeight > workArea.y + workArea.height) newY = workArea.y + workArea.height - winHeight;
 
         win.setPosition(newX, newY);
-        
-        // Remember this position for THIS SPECIFIC TYPE
         notificationPositions[currentType] = { x: newX, y: newY };
     }
 });
@@ -440,7 +399,14 @@ ipcMain.on('confirm-quit', () => {
     app.quit();
 });
 
-// Restart App after update
+ipcMain.on('start-download', () => {
+    autoUpdater.downloadUpdate();
+});
+
 ipcMain.on('restart_app', () => {
     autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
 });

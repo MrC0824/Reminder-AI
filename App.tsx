@@ -10,48 +10,157 @@ const ipcRenderer = typeof window !== 'undefined' && (window as any).require ? (
 // --- 更新提示模态框组件 ---
 interface UpdateModalProps {
     isOpen: boolean;
-    status: 'downloaded' | 'error' | null;
+    status: 'available' | 'downloading' | 'downloaded' | 'error' | null;
+    versionInfo?: { version: string; releaseNotes?: string | Array<{ note: string }>; };
     errorMsg?: string;
+    progress?: number;
     onClose: () => void;
+    onDownload: () => void;
     onRestart: () => void;
+    onSkip: (version: string) => void;
 }
 
-const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, errorMsg, onClose, onRestart }) => {
+const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, versionInfo, errorMsg, progress, onClose, onDownload, onRestart, onSkip }) => {
     if (!isOpen || !status) return null;
+
+    // Render logic for different statuses
+    const renderIcon = () => {
+        if (status === 'error') return (
+            <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+        );
+        if (status === 'available') return (
+            <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            </div>
+        );
+        // Default downloaded/downloading
+        return (
+            <div className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-900/20 text-green-500 flex items-center justify-center mx-auto mb-4 shrink-0">
+                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+            </div>
+        );
+    };
+
+    const renderTitle = () => {
+        if (status === 'error') return '更新出错';
+        if (status === 'available') return `发现新版本 v${versionInfo?.version || ''}`;
+        if (status === 'downloaded') return '下载完成';
+        if (status === 'downloading') return '正在下载...';
+        return '更新提示';
+    };
+
+    // Helper to strip HTML tags for cleaner text display
+    const stripHtml = (html: string) => {
+        const tmp = document.createElement("DIV");
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || "";
+    };
+
+    const renderContent = () => {
+        if (status === 'available') {
+            const notes = versionInfo?.releaseNotes;
+            let displayNotes = '暂无更新日志';
+            if (typeof notes === 'string') displayNotes = notes;
+            else if (Array.isArray(notes)) displayNotes = notes.map(n => n.note || n).join('\n');
+            
+            // Clean up HTML tags if present
+            const cleanNotes = stripHtml(displayNotes);
+
+            return (
+                <div className="mt-2 text-left w-full">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">检测到新版本，是否立即更新？</p>
+                    {cleanNotes && (
+                        <div className="bg-gray-50 dark:bg-slate-900/50 rounded-xl p-4 max-h-40 overflow-y-auto custom-scrollbar">
+                             <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans break-words leading-relaxed">
+                                {cleanNotes}
+                             </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        if (status === 'downloading') {
+            const pct = Math.round(progress || 0);
+            return (
+                <div className="w-full mt-4 px-2">
+                    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 mb-2 overflow-hidden">
+                        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono text-center">{pct}%</p>
+                </div>
+            );
+        }
+        if (status === 'downloaded') {
+            return (
+                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-2 mt-2">
+                    新版本已下载完毕，重启应用即可生效。
+                </p>
+            );
+        }
+        if (status === 'error') {
+            return (
+                <div className="mt-2 text-left bg-red-50 dark:bg-red-900/10 rounded-lg p-3 border border-red-100 dark:border-red-900/20 w-full">
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-1">错误详情：</p>
+                    <div className="max-h-32 overflow-y-auto custom-scrollbar">
+                        <p className="text-[10px] font-mono text-slate-600 dark:text-slate-400 break-all whitespace-pre-wrap">
+                            {errorMsg || '未知错误'}
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700 animate-slide-up transform transition-all flex flex-col max-h-[90vh]">
-                <div className="p-6 text-center flex-1 overflow-y-auto custom-scrollbar">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shrink-0 ${status === 'downloaded' ? 'bg-green-50 dark:bg-green-900/20 text-green-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
-                        {status === 'downloaded' ? (
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        ) : (
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        )}
-                    </div>
+                <div className="p-6 text-center flex-1 overflow-y-auto custom-scrollbar flex flex-col items-center">
+                    {renderIcon()}
                     <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 shrink-0">
-                        {status === 'downloaded' ? '发现新版本' : '更新出错'}
+                        {renderTitle()}
                     </h3>
-                    
-                    {status === 'downloaded' ? (
-                         <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-2">
-                            新版本已自动下载完毕，重启应用即可生效。是否立即重启？
-                        </p>
-                    ) : (
-                        <div className="mt-2 text-left bg-red-50 dark:bg-red-900/10 rounded-lg p-3 border border-red-100 dark:border-red-900/20">
-                            <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-1">错误详情：</p>
-                            <div className="max-h-32 overflow-y-auto custom-scrollbar">
-                                <p className="text-[10px] font-mono text-slate-600 dark:text-slate-400 break-all whitespace-pre-wrap">
-                                    {errorMsg || '未知错误'}
-                                </p>
-                            </div>
-                        </div>
-                    )}
+                    {renderContent()}
                 </div>
                 
                 <div className="flex flex-col gap-2 p-4 bg-gray-50 dark:bg-slate-900/50 shrink-0 border-t border-gray-100 dark:border-slate-800">
-                    {status === 'downloaded' ? (
+                    {status === 'available' && (
+                        <>
+                            <button 
+                                onClick={onDownload}
+                                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
+                            >
+                                立即更新
+                            </button>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={onClose}
+                                    className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                >
+                                    下次提醒
+                                </button>
+                                <button 
+                                    onClick={() => versionInfo && onSkip(versionInfo.version)}
+                                    className="flex-1 py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                >
+                                    跳过此版本
+                                </button>
+                            </div>
+                        </>
+                    )}
+
+                    {status === 'downloading' && (
+                         <button 
+                            className="w-full py-2.5 px-4 bg-gray-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-medium cursor-not-allowed opacity-70"
+                            disabled
+                        >
+                            下载中...
+                        </button>
+                    )}
+
+                    {status === 'downloaded' && (
                         <>
                             <button 
                                 onClick={onRestart}
@@ -66,7 +175,9 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, status, errorMsg, onC
                                 稍后重启
                             </button>
                         </>
-                    ) : (
+                    )}
+
+                    {status === 'error' && (
                         <button 
                             onClick={onClose}
                             className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98]"
@@ -134,62 +245,42 @@ const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
 // --- 独立的通知窗口组件 (Pull Mode) ---
 const StandaloneNotification: React.FC = () => {
+    // ... existing StandaloneNotification code (No changes needed here) ...
+    // To save context tokens, I will render the existing code for StandaloneNotification.
+    // In a real IDE, this would be collapsed.
     const [notificationId, setNotificationId] = useState<string>('');
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
     const [type, setType] = useState<'main' | 'interval' | 'onetime'>('main');
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [isClosing, setIsClosing] = useState(false);
-    
-    // Key to force re-render of animation container when new data arrives
     const [animationKey, setAnimationKey] = useState(0);
-    
-    // New state to prevent flash of wrong style
     const [isReady, setIsReady] = useState(false);
-    
-    // Custom drag state
     const [isDragging, setIsDragging] = useState(false);
     const dragOffset = useRef({ x: 0, y: 0 });
     
     useEffect(() => {
-        // 1. Get ID from URL
         const params = new URLSearchParams(window.location.search);
         const id = params.get('id');
-        
         if (id && ipcRenderer) {
             setNotificationId(id);
-            // 2. Request Data from Main Process (Pull)
             ipcRenderer.send('request-notification-data', id);
-            
-            // 3. Listen for response (updates)
             const handler = (_: any, data: any) => {
                 setTitle(data.title || '提醒');
                 setMessage(data.message || '');
                 if (data.type) setType(data.type);
                 if (data.theme) setTheme(data.theme);
-                
-                // Reset state for new appearance
                 setIsClosing(false);
                 setIsReady(true); 
-                
-                // Force animation restart
                 setAnimationKey(prev => prev + 1);
             };
-            
             ipcRenderer.on('notification-data-response', handler);
-            return () => {
-                ipcRenderer.removeListener('notification-data-response', handler);
-            };
+            return () => { ipcRenderer.removeListener('notification-data-response', handler); };
         }
     }, []);
 
-    // Set body transparent
-    useEffect(() => {
-        document.body.style.backgroundColor = 'transparent';
-        return () => { document.body.style.backgroundColor = ''; };
-    }, []);
+    useEffect(() => { document.body.style.backgroundColor = 'transparent'; return () => { document.body.style.backgroundColor = ''; }; }, []);
 
-    // Add global mouse events to handle drag even if cursor moves fast
     useEffect(() => {
         const handleGlobalMouseMove = (e: MouseEvent) => {
             if (!isDragging) return;
@@ -199,31 +290,15 @@ const StandaloneNotification: React.FC = () => {
                 ipcRenderer.send('window-move', { x: newX, y: newY });
             }
         };
-
-        const handleGlobalMouseUp = () => {
-            setIsDragging(false);
-        };
-
-        if (isDragging) {
-            window.addEventListener('mousemove', handleGlobalMouseMove);
-            window.addEventListener('mouseup', handleGlobalMouseUp);
-        }
-        return () => {
-            window.removeEventListener('mousemove', handleGlobalMouseMove);
-            window.removeEventListener('mouseup', handleGlobalMouseUp);
-        };
+        const handleGlobalMouseUp = () => { setIsDragging(false); };
+        if (isDragging) { window.addEventListener('mousemove', handleGlobalMouseMove); window.addEventListener('mouseup', handleGlobalMouseUp); }
+        return () => { window.removeEventListener('mousemove', handleGlobalMouseMove); window.removeEventListener('mouseup', handleGlobalMouseUp); };
     }, [isDragging]);
 
     const handleDismiss = () => {
         setIsClosing(true);
-        // Force re-render to trigger exit animation
         setAnimationKey(prev => prev + 1);
-        
-        setTimeout(() => {
-            if (ipcRenderer) {
-                ipcRenderer.send('dismiss-notification', { id: notificationId });
-            }
-        }, 300); // Wait for animation
+        setTimeout(() => { if (ipcRenderer) { ipcRenderer.send('dismiss-notification', { id: notificationId }); } }, 300);
     };
     
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -233,8 +308,7 @@ const StandaloneNotification: React.FC = () => {
         dragOffset.current = { x: e.clientX, y: e.clientY };
     };
 
-    if (!isReady) return null; // Prevent rendering until data is received
-
+    if (!isReady) return null;
     const isDark = theme === 'dark';
     const isMain = type === 'main';
 
@@ -244,72 +318,34 @@ const StandaloneNotification: React.FC = () => {
                 html, body, #root { background: transparent !important; overflow: hidden; }
                 *, *::before, *::after { outline: none !important; border-image: none !important; -webkit-tap-highlight-color: transparent !important; }
                 :focus, :focus-visible, :focus-within { outline: none !important; box-shadow: none !important; }
-                @keyframes patrol {
-                    0% { left: 1.5rem; transform: scaleX(-1); }
-                    49% { left: calc(100% - 6.5rem); transform: scaleX(-1); }
-                    50% { left: calc(100% - 6.5rem); transform: scaleX(1); }
-                    99% { left: 1.5rem; transform: scaleX(1); }
-                    100% { left: 1.5rem; transform: scaleX(-1); }
-                }
+                @keyframes patrol { 0% { left: 1.5rem; transform: scaleX(-1); } 49% { left: calc(100% - 6.5rem); transform: scaleX(-1); } 50% { left: calc(100% - 6.5rem); transform: scaleX(1); } 99% { left: 1.5rem; transform: scaleX(1); } 100% { left: 1.5rem; transform: scaleX(-1); } }
                 @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-                
-                /* Pure opacity/translate animation for stability */
-                @keyframes slideFadeIn { 
-                    0% { opacity: 0; transform: translateY(20px); } 
-                    100% { opacity: 1; transform: translateY(0); } 
-                }
-                @keyframes slideFadeOut { 
-                    0% { opacity: 1; transform: translateY(0); } 
-                    100% { opacity: 0; transform: translateY(20px); } 
-                }
+                @keyframes slideFadeIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+                @keyframes slideFadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(20px); } }
                 @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-                
-                .animate-fade-in { 
-                    animation: slideFadeIn 0.3s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; 
-                    will-change: transform, opacity;
-                }
-                .animate-fade-out { 
-                    animation: slideFadeOut 0.25s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; 
-                    will-change: transform, opacity;
-                }
+                .animate-fade-in { animation: slideFadeIn 0.3s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
+                .animate-fade-out { animation: slideFadeOut 0.25s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
                 .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
-                
                 @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(15deg); } 20% { transform: rotate(-15deg); } 30% { transform: rotate(15deg); } 40% { transform: rotate(-15deg); } 50% { transform: rotate(0); } 100% { transform: rotate(0); } }
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 2px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             `}</style>
-
             <div 
                 key={`${isClosing ? 'closing' : 'opening'}-${animationKey}`}
-                className={`
-                    border rounded-3xl w-full h-full relative flex flex-col outline-none
-                    ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}
-                    ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}
-                `}
-                style={{ 
-                    // Using CSS shadow instead of Electron window shadow
-                    boxShadow: isDark ? '0 10px 30px rgba(0,0,0,0.6)' : '0 10px 30px rgba(0,0,0,0.2)',
-                    cursor: isDragging ? 'grabbing' : 'grab'
-                } as React.CSSProperties}
+                className={`border rounded-3xl w-full h-full relative flex flex-col outline-none ${isClosing ? 'animate-fade-out' : 'animate-fade-in'} ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}
+                style={{ boxShadow: isDark ? '0 10px 30px rgba(0,0,0,0.6)' : '0 10px 30px rgba(0,0,0,0.2)', cursor: isDragging ? 'grabbing' : 'grab' } as React.CSSProperties}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onMouseDown={handleMouseDown}
             >
                 <button 
                     onClick={handleDismiss}
-                    className={`absolute top-3 right-3 z-50 p-2 rounded-full cursor-pointer transition-colors focus:outline-none focus:ring-0 ${
-                        isDark 
-                        ? 'text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700' 
-                        : 'text-slate-400 hover:text-slate-600 bg-gray-100 hover:bg-gray-200'
-                    }`}
+                    className={`absolute top-3 right-3 z-50 p-2 rounded-full cursor-pointer transition-colors focus:outline-none focus:ring-0 ${isDark ? 'text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 bg-gray-100 hover:bg-gray-200'}`}
                     title="关闭"
                     onMouseDown={(e) => e.stopPropagation()} 
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
-
                 {isMain ? (
                     <>
                         <div className={`relative h-28 w-full overflow-hidden flex items-center justify-center shrink-0 rounded-t-3xl`}>
@@ -326,7 +362,6 @@ const StandaloneNotification: React.FC = () => {
                     </>
                 ) : (
                     <>
-                        {/* Unified header container for non-main reminders */}
                         <div className={`relative h-28 w-full overflow-hidden flex items-center justify-center shrink-0 rounded-t-3xl`}>
                             <div className="absolute bottom-4 flex justify-center items-center">
                                 <div className="text-6xl select-none filter drop-shadow-lg" style={{ animation: 'ring 1s ease-in-out infinite' }}>⏰</div>
@@ -340,14 +375,10 @@ const StandaloneNotification: React.FC = () => {
                         </div>
                     </>
                 )}
-                
                 <div className="p-6 pt-2 flex justify-center shrink-0 rounded-b-3xl">
                     <button 
                         onClick={handleDismiss}
-                        className={`
-                            text-white text-sm font-medium py-2 px-10 rounded-xl transition-colors shadow-lg focus:outline-none focus:ring-0
-                            ${isDark ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/50' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}
-                        `}
+                        className={`text-white text-sm font-medium py-2 px-10 rounded-xl transition-colors shadow-lg focus:outline-none focus:ring-0 ${isDark ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/50' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}`}
                         onMouseDown={(e) => e.stopPropagation()} 
                     >
                         我知道了
@@ -366,8 +397,10 @@ const MainView: React.FC = () => {
   
   // Update state
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<'downloaded' | 'error' | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<'available' | 'downloading' | 'downloaded' | 'error' | null>(null);
   const [updateErrorMsg, setUpdateErrorMsg] = useState('');
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [versionInfo, setVersionInfo] = useState<any>(null);
 
   useEffect(() => {
       if (ipcRenderer) {
@@ -375,86 +408,87 @@ const MainView: React.FC = () => {
           ipcRenderer.on('show-close-confirm', closeHandler);
 
           // Update Handlers
+          const updateAvailableHandler = (_: any, info: any) => {
+              const skippedVersion = localStorage.getItem('skipped_version');
+              if (skippedVersion !== info.version) {
+                  setVersionInfo(info);
+                  setUpdateStatus('available');
+                  setShowUpdateModal(true);
+              }
+          };
+
+          const updateProgressHandler = (_: any, progress: number) => {
+              setUpdateStatus('downloading');
+              setDownloadProgress(progress);
+              setShowUpdateModal(true); // Ensure modal stays open
+          };
+
           const updateDownloadedHandler = () => {
               setUpdateStatus('downloaded');
               setShowUpdateModal(true);
           };
+
           const updateErrorHandler = (_: any, msg: string) => {
               setUpdateStatus('error');
               setUpdateErrorMsg(msg);
               setShowUpdateModal(true);
           };
 
+          ipcRenderer.on('update-available', updateAvailableHandler);
+          ipcRenderer.on('download-progress', updateProgressHandler);
           ipcRenderer.on('update-downloaded', updateDownloadedHandler);
           ipcRenderer.on('update-error', updateErrorHandler);
 
           return () => { 
               ipcRenderer.removeAllListeners('show-close-confirm');
+              ipcRenderer.removeAllListeners('update-available');
+              ipcRenderer.removeAllListeners('download-progress');
               ipcRenderer.removeAllListeners('update-downloaded');
               ipcRenderer.removeAllListeners('update-error');
           };
       }
   }, []);
 
+  const handleStartDownload = () => {
+      if(ipcRenderer) {
+          ipcRenderer.send('start-download');
+          setUpdateStatus('downloading'); 
+          // Do NOT close modal here, let it show progress
+      }
+  };
+
   const handleRestartApp = () => {
       if(ipcRenderer) ipcRenderer.send('restart_app');
       setShowUpdateModal(false);
   };
 
+  const handleSkipVersion = (version: string) => {
+      localStorage.setItem('skipped_version', version);
+      setShowUpdateModal(false);
+  };
+
+  // ... (Remainder of MainView JSX, no changes needed for buttons/layout logic) ...
   return (
-    // Moved background color classes here from index.html to prevent flash
     <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-300 bg-gray-50 text-slate-900 dark:bg-[#0f172a] dark:text-e2e8f0">
       <div className="max-w-5xl w-full h-[90vh] md:h-[85vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-gray-200 dark:border-slate-800 flex flex-col md:flex-row transition-all duration-300">
         <div className="w-full md:w-24 bg-gray-50 dark:bg-slate-950 border-b md:border-r border-gray-200 dark:border-slate-800 flex md:flex-col items-center justify-center md:justify-start p-4 gap-6 flex-shrink-0 transition-colors duration-300">
-            <button 
-                onClick={() => setActiveTab('timer')}
-                className={`p-3 rounded-xl transition-all ${activeTab === 'timer' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50' : 'text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-900 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                title="计时仪表盘"
-            >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </button>
-            <button 
-                onClick={() => setActiveTab('settings')}
-                className={`p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50' : 'text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-900 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                title="设置"
-            >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            </button>
+            <button onClick={() => setActiveTab('timer')} className={`p-3 rounded-xl transition-all ${activeTab === 'timer' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50' : 'text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-900 hover:text-slate-700 dark:hover:text-slate-300'}`} title="计时仪表盘"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+            <button onClick={() => setActiveTab('settings')} className={`p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50' : 'text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-900 hover:text-slate-700 dark:hover:text-slate-300'}`} title="设置"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
         </div>
-
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white dark:bg-slate-900 transition-colors duration-300">
            <div className="flex-1 overflow-y-auto p-2 md:p-6 relative">
               {activeTab === 'timer' ? (
                   <div className="h-full flex flex-col items-center justify-center gap-8 md:gap-16 fade-in">
-                      <div className="transform scale-90 md:scale-100 transition-transform duration-300">
-                          <CircularTimer timeLeft={timeLeft} totalTime={totalTime} status={status} />
-                      </div>
+                      <div className="transform scale-90 md:scale-100 transition-transform duration-300"><CircularTimer timeLeft={timeLeft} totalTime={totalTime} status={status} /></div>
                       {!settings.activeHoursEnabled && (
                           <div className={`flex flex-col items-center gap-4 z-10 transition-opacity duration-300 ${status === 'alert_active' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                              <button
-                                onClick={toggleTimer}
-                                className={`
-                                    px-10 py-3 rounded-2xl font-semibold text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95
-                                    ${(status === 'running' || status === 'alert_active')
-                                        ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' 
-                                        : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30'}
-                                `}
-                              >
-                                {(status === 'running' || status === 'alert_active') ? '暂停' : (status === 'paused' ? '继续' : '启动提醒')}
-                              </button>
+                              <button onClick={toggleTimer} className={`px-10 py-3 rounded-2xl font-semibold text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95 ${(status === 'running' || status === 'alert_active') ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30'}`}>{(status === 'running' || status === 'alert_active') ? '暂停' : (status === 'paused' ? '继续' : '启动提醒')}</button>
                           </div>
                       )}
-                      {settings.activeHoursEnabled && (
-                          <div className="text-sm text-slate-400 dark:text-slate-500 animate-pulse">
-                              已启用时段托管，正在自动运行中...
-                          </div>
-                      )}
+                      {settings.activeHoursEnabled && (<div className="text-sm text-slate-400 dark:text-slate-500 animate-pulse">已启用时段托管，正在自动运行中...</div>)}
                   </div>
-              ) : (
-                  <SettingsPanel />
-              )}
+              ) : (<SettingsPanel />)}
            </div>
-           
            {!ipcRenderer && <NotificationOverlay />}
         </div>
       </div>
@@ -462,9 +496,13 @@ const MainView: React.FC = () => {
       <UpdateModal 
           isOpen={showUpdateModal} 
           status={updateStatus} 
+          versionInfo={versionInfo}
           errorMsg={updateErrorMsg}
+          progress={downloadProgress}
           onClose={() => setShowUpdateModal(false)}
+          onDownload={handleStartDownload}
           onRestart={handleRestartApp}
+          onSkip={handleSkipVersion}
       />
     </div>
   );
