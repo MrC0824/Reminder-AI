@@ -1,3 +1,4 @@
+
 export type IntervalUnit = 'seconds' | 'minutes' | 'hours';
 
 export type ThemeMode = 'light' | 'dark';
@@ -57,6 +58,9 @@ export interface AppSettings {
   soundList: SoundProfile[];
   
   isMiniMode: boolean;
+  
+  // Global Shortcut
+  globalShortcut?: string;
 }
 
 export type AppStatus = 'idle' | 'running' | 'paused' | 'waiting' | 'alert_active';

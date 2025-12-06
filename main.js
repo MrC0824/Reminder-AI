@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell } = require('electron');
+
+const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -348,14 +349,8 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
-  // 优化：应用启动时立即检查更新，无需等待前端加载
-  // 这样当 UI 显示时，可能已经有缓存的更新信息了
-  if (process.env.NODE_ENV !== 'development') {
-      // 稍微延迟一下确保网络就绪
-      setTimeout(() => {
-          autoUpdater.checkForUpdates().catch(e => console.log('Startup update check failed:', e));
-      }, 1500);
-  }
+  // NOTE: 已移除自动检查更新的代码
+  // 统一由前端 AppContext 在加载完成后发起检查，方便控制 isManualCheckRef 状态
   
   screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
   screen.on('work-area-added', () => { repositionAllNotifications(); });
@@ -364,6 +359,10 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
@@ -490,4 +489,34 @@ ipcMain.on('open-url', (event, url) => {
 
 ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+});
+
+ipcMain.on('update-global-shortcut', (event, shortcut) => {
+    globalShortcut.unregisterAll();
+    if (shortcut) {
+        try {
+            const ret = globalShortcut.register(shortcut, () => {
+                if (mainWindow) {
+                    if (mainWindow.isVisible()) {
+                        if (mainWindow.isFocused()) {
+                             mainWindow.hide();
+                        } else {
+                            if (mainWindow.isMinimized()) mainWindow.restore();
+                            mainWindow.show();
+                            mainWindow.focus();
+                        }
+                    } else {
+                        if (mainWindow.isMinimized()) mainWindow.restore();
+                        mainWindow.show();
+                        mainWindow.focus();
+                    }
+                }
+            });
+            if (!ret) {
+                console.log('Global shortcut registration failed');
+            }
+        } catch (error) {
+            console.error('Error registering global shortcut:', error);
+        }
+    }
 });

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -86,6 +87,7 @@ const defaultSettings: AppSettings = {
       { id: SYSTEM_SOUND_ID, name: '默认提示音', type: 'system' }
   ],
   isMiniMode: false,
+  globalShortcut: ''
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -110,6 +112,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (typeof merged.isBigWeek !== 'boolean') merged.isBigWeek = true;
         if (typeof merged.skipHolidays !== 'boolean') merged.skipHolidays = true;
         if (!merged.theme || merged.theme === 'system' as any) merged.theme = 'dark';
+        if (!merged.globalShortcut) merged.globalShortcut = '';
         delete (merged as any).autoStartOnLaunch;
         return merged;
       } catch (e) { return defaultSettings; }
@@ -126,6 +129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [updateErrorMsg, setUpdateErrorMsg] = useState('');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isPortableUpdate, setIsPortableUpdate] = useState(false);
+  
+  // Ref to track if the current check is manual (initiated by user)
+  const isManualCheckRef = useRef(false);
+
   const [skippedVersions, setSkippedVersions] = useState<string[]>(() => {
       const saved = localStorage.getItem('skipped_versions');
       return saved ? JSON.parse(saved) : [];
@@ -160,6 +167,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const prevRemindersRef = useRef(settings.customReminders);
 
   useEffect(() => {
+      // Sync Global Shortcut to Main Process
+      if (ipcRenderer && !isNotificationMode) {
+          ipcRenderer.send('update-global-shortcut', settings.globalShortcut || '');
+      }
+  }, [settings.globalShortcut]);
+
+  useEffect(() => {
     if (!ipcRenderer || isNotificationMode) return;
 
     const onUpdateAvailable = (_: any, info: UpdateInfo) => {
@@ -174,6 +188,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const onUpdateNotAvailable = () => {
+        // Only show 'not-available' (Already latest version) if it was a manual check
+        if (!isManualCheckRef.current) return;
+
         setUpdateStatus('not-available');
         // Reset status after 3 seconds so the "Latest version" message fades out or changes back to idle
         setTimeout(() => {
@@ -194,6 +211,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const onUpdateError = (_: any, message: string) => {
+        // Suppress errors for auto checks to avoid annoyance
+        if (!isManualCheckRef.current) return;
+        
         setUpdateStatus('error');
         setUpdateErrorMsg(message);
         setIsUpdateModalOpen(true);
@@ -218,6 +238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const checkUpdates = (manual: boolean = false) => {
       if (!ipcRenderer) return;
+      isManualCheckRef.current = manual;
       if (manual) setUpdateStatus('checking');
       ipcRenderer.send('check-for-updates', manual);
   };
@@ -271,7 +292,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateHolidays();
       if (ipcRenderer) {
         // Startup auto check
-        ipcRenderer.send('check-for-updates', false);
+        // We set manual=false so it won't show "Up to date"
+        checkUpdates(false);
       }
   }, []);
 

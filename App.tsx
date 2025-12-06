@@ -415,7 +415,7 @@ const StandaloneNotification: React.FC = () => {
                         <div className="flex-1 flex flex-col items-center justify-center p-6 pt-0 text-center w-full min-h-0">
                              <h3 className={`text-xl font-bold mb-2 shrink-0 ${isDark ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
                              <div className="w-full relative max-h-32 overflow-y-auto custom-scrollbar break-all px-2" onMouseDown={(e) => e.stopPropagation()}>
-                                <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{message}</p>
+                                <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{message.replace(/\\n/g, '\n')}</p>
                              </div>
                         </div>
                     </>
@@ -429,7 +429,7 @@ const StandaloneNotification: React.FC = () => {
                         <div className="flex-1 flex flex-col items-center justify-center p-6 pt-0 text-center w-full min-h-0">
                              <h3 className={`text-xl font-bold mb-2 shrink-0 ${isDark ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
                              <div className="w-full relative max-h-32 overflow-y-auto custom-scrollbar break-all px-2" onMouseDown={(e) => e.stopPropagation()}>
-                                <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{message}</p>
+                                <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{message.replace(/\\n/g, '\n')}</p>
                              </div>
                         </div>
                     </>

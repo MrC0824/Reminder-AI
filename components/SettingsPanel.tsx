@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
@@ -240,6 +241,54 @@ const SettingsPanel: React.FC = () => {
     );
     updateSettings({ activeHoursRanges: updatedRanges });
   };
+  
+  // Shortcut Recording
+  const [isRecording, setIsRecording] = useState(false);
+  const shortcutInputRef = useRef<HTMLInputElement>(null);
+  const ignoreBlurRef = useRef(false);
+
+  // Focus management effect
+  useEffect(() => {
+    if (isRecording) {
+        shortcutInputRef.current?.focus();
+        
+        // Keep lock active for a short while to prevent immediate blur
+        const timer = setTimeout(() => {
+            ignoreBlurRef.current = false;
+        }, 300);
+        return () => clearTimeout(timer);
+    }
+  }, [isRecording]);
+
+  const handleShortcutKeyDown = (e: React.KeyboardEvent) => {
+      if (!isRecording) return;
+      e.preventDefault();
+
+      const keys = [];
+      if (e.ctrlKey) keys.push('Ctrl');
+      if (e.shiftKey) keys.push('Shift');
+      if (e.altKey) keys.push('Alt');
+      if (e.metaKey) keys.push('Super'); // Electron uses Super or Command
+
+      // Ignore isolated modifier presses
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+      
+      // Map keys to Electron Accelerator format if needed, but basic keys usually work
+      let key = e.key.toUpperCase();
+      // Handle special cases if necessary, but keep it simple for now
+      if (key === ' ') key = 'Space';
+      
+      keys.push(key);
+      const shortcutStr = keys.join('+');
+      
+      updateSettings({ globalShortcut: shortcutStr });
+      setIsRecording(false);
+  };
+  
+  const clearShortcut = () => {
+      updateSettings({ globalShortcut: '' });
+      setIsRecording(false);
+  };
 
   const themes = [
       { id: 'light', name: '浅色模式', icon: '☀️' },
@@ -261,10 +310,10 @@ const SettingsPanel: React.FC = () => {
             </h2>
             <div className="flex items-center gap-3">
                  {/* Update Status Feedback */}
-                 {updateStatus === 'checking' && (
+                 {ipcRenderer && updateStatus === 'checking' && (
                      <span className="text-xs text-slate-500 animate-pulse">正在检查...</span>
                  )}
-                 {updateStatus === 'not-available' && (
+                 {ipcRenderer && updateStatus === 'not-available' && (
                      <span className="text-xs text-green-600 dark:text-green-400">已是最新版本</span>
                  )}
                  
@@ -272,17 +321,19 @@ const SettingsPanel: React.FC = () => {
                     <span className="text-xs text-slate-400 font-mono bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">{`v${appVersion}`}</span>
                  )}
 
-                 {/* Check Update Button */}
-                 <button 
-                    onClick={() => checkUpdates(true)}
-                    disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
-                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="检查更新"
-                 >
-                    <svg className={`w-4 h-4 ${updateStatus === 'checking' ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                 </button>
+                 {/* Check Update Button - Only visible in Electron */}
+                 {ipcRenderer && (
+                    <button 
+                        onClick={() => checkUpdates(true)}
+                        disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                        className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="检查更新"
+                    >
+                        <svg className={`w-4 h-4 ${updateStatus === 'checking' ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                 )}
             </div>
         </div>
 
@@ -306,6 +357,55 @@ const SettingsPanel: React.FC = () => {
                 ))}
             </div>
             </div>
+            
+            {/* Global Shortcut Section */}
+            {ipcRenderer && (
+                <div className="space-y-4">
+                    <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">全局快捷键</label>
+                    <div className="flex flex-col gap-2">
+                         <span className="text-xs text-slate-500">一键显示/隐藏主界面 (即使应用在后台)</span>
+                         <div className="flex gap-2">
+                             <div className={`relative flex-1 bg-white dark:bg-slate-900 border rounded-lg flex items-center px-3 py-2 transition-colors ${isRecording ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-300 dark:border-slate-600'}`}>
+                                 <input
+                                    ref={shortcutInputRef}
+                                    type="text"
+                                    readOnly
+                                    value={isRecording ? '请按下快捷键组合...' : (settings.globalShortcut || '未设置')}
+                                    onKeyDown={handleShortcutKeyDown}
+                                    onBlur={(e) => {
+                                        if (ignoreBlurRef.current) {
+                                            e.target.focus();
+                                            return;
+                                        }
+                                        setIsRecording(false);
+                                    }}
+                                    className={`w-full bg-transparent outline-none text-sm cursor-default ${isRecording ? 'text-blue-500' : (settings.globalShortcut ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400')}`}
+                                 />
+                                 {settings.globalShortcut && !isRecording && (
+                                     <button onClick={clearShortcut} className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                     </button>
+                                 )}
+                             </div>
+                             {/* Wrapper to prevent blur when clicking disabled button */}
+                             <div 
+                                onMouseDown={(e) => isRecording && e.preventDefault()}
+                             >
+                                <button 
+                                    onClick={() => {
+                                        ignoreBlurRef.current = true;
+                                        setIsRecording(true);
+                                    }}
+                                    disabled={isRecording}
+                                    className={`h-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isRecording ? 'bg-gray-100 text-slate-500 pointer-events-none' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                >
+                                    {isRecording ? '录制中...' : (settings.globalShortcut ? '重新设置' : '设置快捷键')}
+                                </button>
+                             </div>
+                         </div>
+                    </div>
+                </div>
+            )}
 
             <div className="space-y-4">
             <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">主提醒 (循环)</label>
@@ -441,7 +541,7 @@ const SettingsPanel: React.FC = () => {
                     <div>
                         <input 
                                 type="text" 
-                                placeholder="提醒内容 (例如: 到饭点叫外卖)"
+                                placeholder="提醒内容 (支持 \n 换行)"
                                 value={newReminderTitle}
                                 onChange={(e) => setNewReminderTitle(e.target.value)}
                                 className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-white"
