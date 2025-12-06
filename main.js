@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
 // 0. 解决自动播放策略限制 (NotAllowedError)
@@ -14,15 +15,26 @@ if (process.platform === 'win32') {
 const powerId = powerSaveBlocker.start('prevent-app-suspension');
 
 // --- AutoUpdater 配置 ---
-autoUpdater.autoDownload = false; // 保持 false，手动触发
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true; 
 autoUpdater.verifyUpdateCodeSignature = false; 
 autoUpdater.disableWebInstaller = true; 
 autoUpdater.allowDowngrade = false;
 autoUpdater.fullChangelog = true;
 
+// Fix: Explicitly set feed URL to ensure Portable apps can detect updates 
+// (Portable builds often miss the embedded app-update.yml)
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'MrC0824',
+  repo: 'Reminder-AI'
+});
+
 let mainWindow = null;
 const notificationWindows = new Map(); 
+
+// 缓存更新信息，以便前端连接时立即发送
+let cachedUpdateInfo = null;
 
 const notificationPositions = {
     main: null,
@@ -279,20 +291,38 @@ function createWindow() {
 // --- AutoUpdater Events ---
 
 autoUpdater.on('update-available', (info) => {
-    const isPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
+    // 增强的便携版检测逻辑
+    const exePath = app.getPath('exe');
+    const exeDir = path.dirname(exePath);
+    // 安装版通常会包含卸载程序，便携版或解压版没有
+    const uninstallerName = 'Uninstall RemindHelper.exe'; 
+    const hasUninstaller = fs.existsSync(path.join(exeDir, uninstallerName));
+    
+    // 判定为便携版的条件：
+    // 1. 存在 PORTABLE_EXECUTABLE_DIR 环境变量 (官方 NSIS Portable)
+    // 2. 或者 目录下没有卸载程序 (解压版 win-unpacked)
+    // 3. 或者 运行在临时目录下 (NSIS Portable 运行时)
+    const isEnvPortable = process.env.PORTABLE_EXECUTABLE_DIR !== undefined;
+    const isTemp = exePath.toLowerCase().includes(app.getPath('temp').toLowerCase());
+    
+    const isPortable = isEnvPortable || !hasUninstaller || isTemp;
     
     // 注入便携版标识
     const infoWithPortable = { ...info, portable: isPortable };
+    
+    // 缓存结果，供后续查询
+    cachedUpdateInfo = infoWithPortable;
 
     // 无论是便携版还是安装版，都通知前端显示 UI
-    // 安装版在用户点击确认后会触发 start-download
-    // 便携版在用户点击下载后会触发 open-url
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', infoWithPortable);
     }
-    
-    // 如果是安装版，且你想保持静默下载（可选），可以在这里触发
-    // 但既然前端有"立即更新"按钮，交给前端控制逻辑更清晰
+});
+
+autoUpdater.on('update-not-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-not-available', info);
+    }
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
@@ -318,12 +348,15 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
+  // 优化：应用启动时立即检查更新，无需等待前端加载
+  // 这样当 UI 显示时，可能已经有缓存的更新信息了
   if (process.env.NODE_ENV !== 'development') {
+      // 稍微延迟一下确保网络就绪
       setTimeout(() => {
-          autoUpdater.checkForUpdates().catch(e => console.error("Check for updates failed:", e));
-      }, 3000);
+          autoUpdater.checkForUpdates().catch(e => console.log('Startup update check failed:', e));
+      }, 1500);
   }
-
+  
   screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
   screen.on('work-area-added', () => { repositionAllNotifications(); });
   screen.on('work-area-removed', () => { repositionAllNotifications(); });
@@ -340,6 +373,38 @@ app.on('window-all-closed', () => {
 });
 
 // --- IPC Communication ---
+
+ipcMain.on('check-for-updates', (event, manual) => {
+    // Only check for updates in production
+    if (process.env.NODE_ENV !== 'development') {
+        // 如果是手动检查，强制重新请求，不使用缓存
+        if (manual) {
+            cachedUpdateInfo = null;
+            autoUpdater.checkForUpdates().catch(err => {
+                console.error('Manual update check failed:', err);
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                     mainWindow.webContents.send('update-error', `检查更新失败: ${err.message}`);
+                }
+            });
+            return;
+        }
+
+        // 自动检查逻辑：如果有缓存，直接返回
+        if (cachedUpdateInfo) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('update-available', cachedUpdateInfo);
+            }
+        } else {
+            // 没有缓存则发起检查
+            autoUpdater.checkForUpdates().catch(err => {
+                console.error('Update check failed:', err);
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                     mainWindow.webContents.send('update-error', `检查更新失败: ${err.message}`);
+                }
+            });
+        }
+    }
+});
 
 ipcMain.on('resize-window', (event, { width, height }) => {
   if (mainWindow) mainWindow.setSize(width, height);
@@ -411,11 +476,14 @@ ipcMain.on('start-download', () => {
     });
 });
 
+// 在重启安装前，必须将 isQuitting 设为 true，
+// 否则 window 的 close 事件会被你的代码拦截，导致文件占用无法覆盖。
 ipcMain.on('restart_app', () => {
-    autoUpdater.quitAndInstall();
+    isQuitting = true; // <--- 关键修改
+    autoUpdater.quitAndInstall(true, true);
 });
 
-// 新增：打开外部链接
+// 打开外部链接
 ipcMain.on('open-url', (event, url) => {
     shell.openExternal(url);
 });

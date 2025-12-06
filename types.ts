@@ -62,10 +62,10 @@ export interface AppSettings {
 export type AppStatus = 'idle' | 'running' | 'paused' | 'waiting' | 'alert_active';
 
 // --- Update Related Types ---
-export type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'error' | null;
+export type UpdateStatus = 'available' | 'downloading' | 'downloaded' | 'error' | 'checking' | 'not-available' | null;
 
 export interface UpdateInfo {
     version: string;
     releaseNotes?: string | Array<{ note: string }>;
-    portable?: boolean; // 新增：标识是否为便携版
+    portable?: boolean; // 标识是否为便携版
 }

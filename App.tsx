@@ -3,6 +3,7 @@ import { AppProvider, useApp } from '@/context/AppContext';
 import CircularTimer from '@/components/CircularTimer';
 import SettingsPanel from '@/components/SettingsPanel';
 import { NotificationOverlay } from '@/components/NotificationOverlay';
+import { UpdateStatus } from '@/types';
 
 // Helper to access IPC
 const ipcRenderer = typeof window !== 'undefined' && (window as any).require ? (window as any).require('electron').ipcRenderer : null;
@@ -10,7 +11,7 @@ const ipcRenderer = typeof window !== 'undefined' && (window as any).require ? (
 // --- 更新提示模态框组件 ---
 interface UpdateModalProps {
     isOpen: boolean;
-    status: 'available' | 'downloading' | 'downloaded' | 'error' | null;
+    status: UpdateStatus;
     versionInfo?: { version: string; releaseNotes?: string | Array<{ note: string }>; };
     errorMsg?: string;
     progress?: number;
@@ -20,6 +21,7 @@ interface UpdateModalProps {
     onDownloadPortable: () => void;
     onRestart: () => void;
     onSkip: (version: string) => void;
+    onRemindLater: () => void; // New
 }
 
 const UpdateModal: React.FC<UpdateModalProps> = ({ 
@@ -33,9 +35,28 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
     onDownload, 
     onDownloadPortable,
     onRestart, 
-    onSkip 
+    onSkip,
+    onRemindLater 
 }) => {
+    // Add local state to debounce click and show loading immediately
+    const [isStarting, setIsStarting] = useState(false);
+
+    useEffect(() => {
+        if (status !== 'available') {
+            setIsStarting(false);
+        }
+    }, [status]);
+
     if (!isOpen || !status) return null;
+
+    const handleConfirmUpdate = () => {
+        setIsStarting(true);
+        if (isPortable) {
+            onDownloadPortable();
+        } else {
+            onDownload();
+        }
+    };
 
     // Render logic for different statuses
     const renderIcon = () => {
@@ -105,12 +126,14 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
 
             return (
                 <div className="mt-2 text-left w-full">
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">检测到新版本，是否立即更新？</p>
                     {cleanNotes && cleanNotes.trim() !== '' && (
-                        <div className="bg-white border border-gray-100 dark:bg-slate-900 dark:border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
-                             <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans break-words leading-relaxed">
-                                {cleanNotes}
-                             </div>
+                        <div className="w-full">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1.5 pl-1">更新内容：</p>
+                            <div className="bg-white border border-gray-100 dark:bg-slate-900 dark:border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
+                                <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans break-words leading-relaxed">
+                                    {cleanNotes}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -167,17 +190,28 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                     {status === 'available' && (
                         <>
                             <button 
-                                onClick={isPortable ? onDownloadPortable : onDownload}
-                                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98] flex items-center justify-center gap-2"
+                                onClick={handleConfirmUpdate}
+                                disabled={isStarting}
+                                className={`w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors focus:outline-none focus:ring-0 active:scale-[0.98] flex items-center justify-center gap-2 ${isStarting ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
-                                {isPortable ? '→ 去下载' : '立即更新'}
+                                {isStarting ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        请稍候...
+                                    </>
+                                ) : (
+                                    isPortable ? '去下载' : '立即更新'
+                                )}
                             </button>
                             
                             {isPortable ? (
                                 <div className="flex gap-2">
                                 <button 
-                                    onClick={onClose}
-                                        className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
+                                    onClick={onRemindLater}
+                                    className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
                                 >
                                         下次提醒
                                 </button>
@@ -191,7 +225,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                             ) : (
                                 <div className="flex gap-2">
                                     <button 
-                                        onClick={onClose}
+                                        onClick={onRemindLater}
                                         className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors focus:outline-none focus:ring-0"
                                     >
                                         下次提醒
@@ -248,7 +282,6 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
 };
 
 // ... (CloseConfirmModal and StandaloneNotification remain unchanged) ...
-// (Retaining CloseConfirmModal and StandaloneNotification code here to ensure file completeness)
 const CloseConfirmModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     const handleMinimize = () => { if (ipcRenderer) ipcRenderer.send('confirm-minimize'); onClose(); };
@@ -434,7 +467,8 @@ const MainView: React.FC = () => {
       startDownload,
       downloadPortable, // 新增
       restartApp,
-      skipUpdate
+      skipUpdate,
+      remindLater // New
   } = useApp();
   const [activeTab, setActiveTab] = useState<'timer' | 'settings'>('timer');
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -487,6 +521,7 @@ const MainView: React.FC = () => {
           onDownloadPortable={downloadPortable} // Pass handler
           onRestart={restartApp}
           onSkip={skipUpdate}
+          onRemindLater={remindLater}
       />
       
       {/* Z-Index raised to 200 */}

@@ -50,12 +50,14 @@ interface AppContextType {
   updateVersionInfo: UpdateInfo | null;
   updateErrorMsg: string;
   isUpdateModalOpen: boolean;
-  isPortableUpdate: boolean; // 新增
+  isPortableUpdate: boolean; 
   closeUpdateModal: () => void;
+  checkUpdates: (manual?: boolean) => void;
   startDownload: () => void;
-  downloadPortable: () => void; // 新增
+  downloadPortable: () => void;
   restartApp: () => void;
   skipUpdate: (version: string) => void;
+  remindLater: () => void; // New
 }
 
 const SYSTEM_SOUND_ID = 'system_default';
@@ -123,15 +125,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [updateVersionInfo, setUpdateVersionInfo] = useState<UpdateInfo | null>(null);
   const [updateErrorMsg, setUpdateErrorMsg] = useState('');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isPortableUpdate, setIsPortableUpdate] = useState(false); // 新增
+  const [isPortableUpdate, setIsPortableUpdate] = useState(false);
   const [skippedVersions, setSkippedVersions] = useState<string[]>(() => {
       const saved = localStorage.getItem('skipped_versions');
       return saved ? JSON.parse(saved) : [];
   });
-
-  // ... (calculateTotalSeconds, useEffects for timers, logic... omitted for brevity as they are unchanged)
-  // 为了节省篇幅，这里隐藏未修改的计时器逻辑，请在合并时保留 AppContext.tsx 中原有的计时器、音频处理等代码
-  // 下面是 Update Logic Effects 的更新部分
 
   const calculateTotalSeconds = useCallback((val?: number, unit?: string) => {
     const v = val ?? settings.intervalValue;
@@ -165,11 +163,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!ipcRenderer || isNotificationMode) return;
 
     const onUpdateAvailable = (_: any, info: UpdateInfo) => {
-        if (skippedVersions.includes(info.version)) return;
+        // If it's a manual check (we are in 'checking' state), we show the modal even if it was skipped before
+        // Otherwise (automatic check), we respect skipped versions
+        if (updateStatus !== 'checking' && skippedVersions.includes(info.version)) return;
+        
         setUpdateVersionInfo(info);
-        setIsPortableUpdate(!!info.portable); // 记录是否为 portable
+        setIsPortableUpdate(!!info.portable);
         setUpdateStatus('available');
         setIsUpdateModalOpen(true);
+    };
+
+    const onUpdateNotAvailable = () => {
+        setUpdateStatus('not-available');
+        // Reset status after 3 seconds so the "Latest version" message fades out or changes back to idle
+        setTimeout(() => {
+            setUpdateStatus(null);
+        }, 3000);
     };
 
     const onDownloadProgress = (_: any, progress: number) => {
@@ -191,21 +200,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     ipcRenderer.on('update-available', onUpdateAvailable);
+    ipcRenderer.on('update-not-available', onUpdateNotAvailable);
     ipcRenderer.on('download-progress', onDownloadProgress);
     ipcRenderer.on('update-downloaded', onUpdateDownloaded);
     ipcRenderer.on('update-error', onUpdateError);
 
     return () => {
         ipcRenderer.removeListener('update-available', onUpdateAvailable);
+        ipcRenderer.removeListener('update-not-available', onUpdateNotAvailable);
         ipcRenderer.removeListener('download-progress', onDownloadProgress);
         ipcRenderer.removeListener('update-downloaded', onUpdateDownloaded);
         ipcRenderer.removeListener('update-error', onUpdateError);
     };
-  }, [skippedVersions]);
+  }, [skippedVersions, updateStatus]);
 
   const closeUpdateModal = () => setIsUpdateModalOpen(false);
   
+  const checkUpdates = (manual: boolean = false) => {
+      if (!ipcRenderer) return;
+      if (manual) setUpdateStatus('checking');
+      ipcRenderer.send('check-for-updates', manual);
+  };
+
   const startDownload = () => {
+      // 优化：点击后立即设置状态为下载中，提供即时反馈，防止重复点击
+      setUpdateStatus('downloading');
+      setUpdateProgress(0);
       if (ipcRenderer) ipcRenderer.send('start-download');
   };
 
@@ -225,8 +245,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsUpdateModalOpen(false);
   };
 
-  // ... (保留原有的计时器初始化、设置保存、音频处理、提醒触发等所有代码) ...
-  // Re-implementing essential hooks for context to work
+  const remindLater = () => {
+      // If user clicks "Remind Later", we ensure it is REMOVED from skipped list
+      // so it will prompt again next time the app starts (or next auto check)
+      if (updateVersionInfo) {
+          const newSkipped = skippedVersions.filter(v => v !== updateVersionInfo.version);
+          if (newSkipped.length !== skippedVersions.length) {
+              setSkippedVersions(newSkipped);
+              localStorage.setItem('skipped_versions', JSON.stringify(newSkipped));
+          }
+      }
+      setIsUpdateModalOpen(false);
+      setUpdateStatus(null);
+  };
+
   useEffect(() => {
       if (isNotificationMode) return;
       silentAudioRef.current = new Audio(SILENT_AUDIO_URL);
@@ -237,6 +269,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
       if (isNotificationMode) return;
       updateHolidays();
+      if (ipcRenderer) {
+        // Startup auto check
+        ipcRenderer.send('check-for-updates', false);
+      }
   }, []);
 
   useEffect(() => {
@@ -437,6 +473,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             type, 
             theme: settings.theme 
         });
+    } else {
+        // Web Preview Mode: Play sound directly
+        if (settings.soundEnabled && audioRef.current) {
+            audioRef.current.loop = true;
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(e => console.error(`Audio playback failed: ${e}`));
+        }
     }
     return true;
   }, [settings, stopPreviewAudio]);
@@ -817,12 +860,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateVersionInfo,
         updateErrorMsg,
         isUpdateModalOpen,
-        isPortableUpdate, // Export
+        isPortableUpdate, 
         closeUpdateModal,
+        checkUpdates,
         startDownload,
-        downloadPortable, // Export
+        downloadPortable, 
         restartApp,
         skipUpdate,
+        remindLater, // New
       }}
     >
       {children}
