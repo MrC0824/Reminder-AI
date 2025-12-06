@@ -7,10 +7,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & Output
 node_modules
 dist
+release
 dist-ssr
 *.local
+
+# --- 新增的过滤规则 ---
+# 忽略根目录下的 build.bat 脚本
+build.bat
+
+# 忽略根目录下的 build 文件夹
+/build/
+
+# 忽略根目录下的 public 文件夹
+/public/
+# ---------------------
 
 # Editor directories and files
 .vscode/*
