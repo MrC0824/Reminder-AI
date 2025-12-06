@@ -18,11 +18,6 @@ dist-ssr
 # 忽略根目录下的 build.bat 脚本
 build.bat
 
-# 忽略根目录下的 build 文件夹
-/build/
-
-# 忽略根目录下的 public 文件夹
-/public/
 # ---------------------
 
 # Editor directories and files
