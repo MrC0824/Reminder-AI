@@ -1,6 +1,6 @@
 {
   "name": "sedentary-reminder-app",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "提醒助手",
   "main": "main.js",
   "repository": {
@@ -12,7 +12,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "dist": "pnpm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}});\"",
-	"release": "pnpm version patch && git push --follow-tags"
+    "release": "pnpm version patch && git push --follow-tags"
   },
   "keywords": [
     "electron",
@@ -22,9 +22,9 @@
   "author": "Gemini",
   "license": "ISC",
   "dependencies": {
-    "builder-util-runtime": "^9.2.4",  
+    "builder-util-runtime": "^9.2.4",
     "electron-updater": "^6.3.9",
-	"fs-extra": "^11.2.0",
+    "fs-extra": "^11.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
