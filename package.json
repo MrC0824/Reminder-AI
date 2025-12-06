@@ -11,8 +11,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "dist": "pnpm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}});\"",
-    "release": "pnpm version patch && git push --follow-tags"
+    "dist": "npm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}});\"",
+    "release": "npm version patch && git push --follow-tags"
   },
   "keywords": [
     "electron",
