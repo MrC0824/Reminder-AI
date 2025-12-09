@@ -28,6 +28,7 @@ export interface CustomReminder {
   // For Interval
   intervalValue?: number;
   intervalUnit?: IntervalUnit;
+  nextTriggerTime?: number; // Added for persistence
 
   // For One-time
   targetDateTime?: number; // Timestamp

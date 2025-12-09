@@ -21,7 +21,7 @@ interface UpdateModalProps {
     onDownloadPortable: () => void;
     onRestart: () => void;
     onSkip: (version: string) => void;
-    onRemindLater: () => void; // New
+    onRemindLater: () => void;
 }
 
 const UpdateModal: React.FC<UpdateModalProps> = ({ 
@@ -462,13 +462,13 @@ const MainView: React.FC = () => {
       updateVersionInfo,
       updateErrorMsg,
       isUpdateModalOpen,
-      isPortableUpdate, // 新增
+      isPortableUpdate,
       closeUpdateModal,
       startDownload,
-      downloadPortable, // 新增
+      downloadPortable,
       restartApp,
       skipUpdate,
-      remindLater // New
+      remindLater
   } = useApp();
   const [activeTab, setActiveTab] = useState<'timer' | 'settings'>('timer');
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -515,10 +515,10 @@ const MainView: React.FC = () => {
           versionInfo={updateVersionInfo || undefined}
           errorMsg={updateErrorMsg}
           progress={updateProgress}
-          isPortable={isPortableUpdate} // Pass portable flag
+          isPortable={isPortableUpdate}
           onClose={closeUpdateModal}
           onDownload={startDownload}
-          onDownloadPortable={downloadPortable} // Pass handler
+          onDownloadPortable={downloadPortable}
           onRestart={restartApp}
           onSkip={skipUpdate}
           onRemindLater={remindLater}

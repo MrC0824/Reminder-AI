@@ -166,6 +166,15 @@ const SettingsPanel: React.FC = () => {
           }
       }
 
+      // Calculate nextTriggerTime for interval reminders to ensure persistence
+      let nextTriggerTime: number | undefined;
+      if (newReminderType === 'interval' && intervalVal > 0) {
+          let multiplier = 60;
+          if (newReminderUnit === 'hours') multiplier = 3600;
+          if (newReminderUnit === 'seconds') multiplier = 1;
+          nextTriggerTime = Date.now() + intervalVal * multiplier * 1000;
+      }
+
       if (editingId) {
           const updatedReminders = settings.customReminders.map(r => {
               if (r.id === editingId) {
@@ -176,6 +185,7 @@ const SettingsPanel: React.FC = () => {
                       intervalValue: newReminderType === 'interval' ? intervalVal : undefined,
                       intervalUnit: newReminderType === 'interval' ? newReminderUnit : undefined,
                       targetDateTime: targetTime,
+                      nextTriggerTime: newReminderType === 'interval' ? nextTriggerTime : undefined, // Reset timer on edit
                       enabled: true 
                   };
               }
@@ -191,7 +201,8 @@ const SettingsPanel: React.FC = () => {
               enabled: true,
               intervalValue: newReminderType === 'interval' ? intervalVal : undefined,
               intervalUnit: newReminderType === 'interval' ? newReminderUnit : undefined,
-              targetDateTime: targetTime
+              targetDateTime: targetTime,
+              nextTriggerTime // Persist initial trigger time
           };
           updateSettings({ customReminders: [...settings.customReminders, newReminder] });
           setNewReminderTitle('');
@@ -209,7 +220,9 @@ const SettingsPanel: React.FC = () => {
   const toggleCustomReminder = (id: string) => {
        const reminder = settings.customReminders.find(r => r.id === id);
        if (!reminder) return;
+
        if (!reminder.enabled) {
+           // Before enabling, check validity for one-time
            if (reminder.type === 'onetime' && reminder.targetDateTime) {
                if (reminder.targetDateTime <= Date.now()) {
                    updateSettings({ customReminders: settings.customReminders.filter(r => r.id !== id) });
@@ -217,9 +230,20 @@ const SettingsPanel: React.FC = () => {
                }
            }
        }
+
+       // Calculate trigger time when enabling to start fresh
+       let nextTriggerTime = reminder.nextTriggerTime;
+       if (!reminder.enabled && reminder.type === 'interval') {
+           let multiplier = 60;
+           if (reminder.intervalUnit === 'hours') multiplier = 3600;
+           if (reminder.intervalUnit === 'seconds') multiplier = 1;
+           const val = reminder.intervalValue || 0;
+           nextTriggerTime = Date.now() + val * multiplier * 1000;
+       }
+
        updateSettings({
           customReminders: settings.customReminders.map(r => 
-            r.id === id ? { ...r, enabled: !r.enabled } : r
+            r.id === id ? { ...r, enabled: !r.enabled, nextTriggerTime } : r
           )
       });
   };
@@ -268,7 +292,7 @@ const SettingsPanel: React.FC = () => {
       if (e.ctrlKey) keys.push('Ctrl');
       if (e.shiftKey) keys.push('Shift');
       if (e.altKey) keys.push('Alt');
-      if (e.metaKey) keys.push('Super'); // Electron uses Super or Command
+      if (e.metaKey) keys.push('Super');
 
       // Ignore isolated modifier presses
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;

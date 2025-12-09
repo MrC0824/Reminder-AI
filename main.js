@@ -349,7 +349,6 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
-  // NOTE: 已移除自动检查更新的代码
   // 统一由前端 AppContext 在加载完成后发起检查，方便控制 isManualCheckRef 状态
   
   screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
