@@ -106,7 +106,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!merged.soundList.some(s => s.id === merged.selectedSoundId)) merged.selectedSoundId = SYSTEM_SOUND_ID;
         if (!Array.isArray(merged.activeHoursRanges)) merged.activeHoursRanges = defaultSettings.activeHoursRanges;
         if (!Array.isArray(merged.customReminders)) merged.customReminders = defaultSettings.customReminders;
-        else merged.customReminders = merged.customReminders.map(r => ({ ...r, type: r.type || 'interval', intervalValue: r.intervalValue || 30, intervalUnit: r.intervalUnit || 'minutes' }));
+        else {
+             // Init nextTriggerTime for interval reminders if missing to ensure they have a start point
+             const now = Date.now();
+             merged.customReminders = merged.customReminders.map(r => {
+                 const mapped = { ...r, type: r.type || 'interval', intervalValue: r.intervalValue || 30, intervalUnit: r.intervalUnit || 'minutes' };
+                 if (mapped.type === 'interval' && mapped.enabled && !mapped.nextTriggerTime) {
+                     let multiplier = 60;
+                     if (mapped.intervalUnit === 'hours') multiplier = 3600;
+                     if (mapped.intervalUnit === 'seconds') multiplier = 1;
+                     mapped.nextTriggerTime = now + (mapped.intervalValue || 30) * multiplier * 1000;
+                 }
+                 return mapped;
+             });
+        }
         if (typeof merged.isMiniMode !== 'boolean') merged.isMiniMode = defaultSettings.isMiniMode;
         if (!merged.workMode) merged.workMode = 'everyday';
         if (typeof merged.isBigWeek !== 'boolean') merged.isBigWeek = true;
@@ -564,14 +577,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                  if (reminder.intervalUnit === 'hours') multiplier = 3600;
                  if (reminder.intervalUnit === 'seconds') multiplier = 1;
                  const total = (reminder.intervalValue || 0) * multiplier;
+                 const nextTime = now + total * 1000;
                  
                  setCustomTimerStates(prev => ({
                      ...prev,
                      [reminder.id]: {
                          timeLeft: total,
-                         endTime: now + total * 1000
+                         endTime: nextTime
                      }
                  }));
+
+                 // Persist next trigger time
+                 setSettings(prev => ({
+                     ...prev,
+                     customReminders: prev.customReminders.map(r => 
+                        r.id === id ? { ...r, nextTriggerTime: nextTime } : r
+                     )
+                 }));
+
              } else if (reminder.type === 'onetime') {
                  if (reminder.targetDateTime && reminder.targetDateTime > now + 1000) {
                      const tLeft = Math.max(0, Math.ceil((reminder.targetDateTime - now) / 1000));
@@ -615,7 +638,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             prevR.intervalValue !== r.intervalValue ||
             prevR.intervalUnit !== r.intervalUnit ||
             prevR.targetDateTime !== r.targetDateTime ||
-            prevR.type !== r.type
+            prevR.type !== r.type ||
+            prevR.nextTriggerTime !== r.nextTriggerTime // Check if nextTriggerTime updated
         );
         
         if (r.enabled) {
@@ -624,11 +648,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                      const tLeft = Math.max(0, Math.ceil((r.targetDateTime - now) / 1000));
                      next[r.id] = { timeLeft: tLeft, endTime: r.targetDateTime ?? null };
                  } else {
-                     let multiplier = 60;
-                     if (r.intervalUnit === 'hours') multiplier = 3600;
-                     if (r.intervalUnit === 'seconds') multiplier = 1;
-                     const total = (r.intervalValue || 0) * multiplier;
-                     next[r.id] = { timeLeft: total, endTime: now + total * 1000 };
+                     // Interval type
+                     let endTime = 0;
+                     let timeLeft = 0;
+                     
+                     if (r.nextTriggerTime) {
+                         // Resume from persisted time
+                         endTime = r.nextTriggerTime;
+                         timeLeft = Math.max(0, Math.ceil((endTime - now) / 1000));
+                     } else {
+                         // Fallback for fresh start (though AppProvider tries to ensure nextTriggerTime is set)
+                         let multiplier = 60;
+                         if (r.intervalUnit === 'hours') multiplier = 3600;
+                         if (r.intervalUnit === 'seconds') multiplier = 1;
+                         const total = (r.intervalValue || 0) * multiplier;
+                         endTime = now + total * 1000;
+                         timeLeft = total;
+                     }
+
+                     next[r.id] = { timeLeft, endTime };
                  }
                  changed = true;
             }
