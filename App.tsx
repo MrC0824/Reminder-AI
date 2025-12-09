@@ -98,9 +98,13 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
 
     // Helper to strip HTML tags for cleaner text display
     const stripHtml = (html: string) => {
-        const tmp = document.createElement("DIV");
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || "";
+        try {
+            const tmp = document.createElement("DIV");
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || "";
+        } catch (e) {
+            return "";
+        }
     };
 
     const renderContent = () => {
@@ -117,12 +121,26 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             }
 
             const notes = versionInfo?.releaseNotes;
-            let displayNotes = '暂无更新日志';
-            if (typeof notes === 'string') displayNotes = notes;
-            else if (Array.isArray(notes)) displayNotes = notes.map(n => n.note || n).join('\n');
+            let displayNotes = '';
+
+            if (typeof notes === 'string') {
+                displayNotes = notes;
+            } else if (Array.isArray(notes)) {
+                displayNotes = notes.map(n => {
+                    if (typeof n === 'string') return n;
+                    // Check if object and has note property
+                    if (n && typeof n === 'object' && 'note' in n) return (n as any).note;
+                    return ''; 
+                }).filter(n => n && typeof n === 'string' && n.trim() !== '').join('\n');
+            }
             
             // Clean up HTML tags if present
-            const cleanNotes = stripHtml(displayNotes);
+            let cleanNotes = stripHtml(displayNotes);
+
+            // Double check for stringified object or empty
+            if (cleanNotes.includes('[object Object]')) {
+                cleanNotes = '';
+            }
 
             return (
                 <div className="mt-2 text-left w-full">
