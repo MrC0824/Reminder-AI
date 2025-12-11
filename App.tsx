@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import CircularTimer from '@/components/CircularTimer';
@@ -123,22 +124,26 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             const notes = versionInfo?.releaseNotes;
             let displayNotes = '';
 
-            if (typeof notes === 'string') {
-                displayNotes = notes;
-            } else if (Array.isArray(notes)) {
-                displayNotes = notes.map(n => {
-                    if (typeof n === 'string') return n;
-                    // Check if object and has note property
-                    if (n && typeof n === 'object' && 'note' in n) return (n as any).note;
-                    return ''; 
-                }).filter(n => n && typeof n === 'string' && n.trim() !== '').join('\n');
+            try {
+                if (typeof notes === 'string') {
+                    displayNotes = notes;
+                } else if (Array.isArray(notes)) {
+                    displayNotes = notes.map(n => {
+                        if (typeof n === 'string') return n;
+                        // Check if object and has note property
+                        if (n && typeof n === 'object' && 'note' in n) return (n as any).note;
+                        return ''; 
+                    }).filter(n => n && typeof n === 'string' && n.trim() !== '').join('\n');
+                }
+            } catch (e) {
+                displayNotes = '';
             }
             
             // Clean up HTML tags if present
-            let cleanNotes = stripHtml(displayNotes);
+            let cleanNotes = stripHtml(displayNotes || '');
 
             // Double check for stringified object or empty
-            if (cleanNotes.includes('[object Object]')) {
+            if (!cleanNotes || cleanNotes.trim() === '' || cleanNotes.includes('[object Object]')) {
                 cleanNotes = '';
             }
 
