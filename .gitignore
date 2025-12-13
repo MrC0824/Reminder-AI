@@ -20,4 +20,3 @@ lerna-debug.log*
 dist
 release
 node_modules
-/build.bat
