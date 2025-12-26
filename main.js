@@ -4,6 +4,21 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
+// --- Portable Mode Data Redirection ---
+// Checks if running as a portable app (NSIS Portable sets this env var).
+// If so, store data in a 'Data' folder next to the executable for true portability.
+if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    const portableDataPath = path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'Data');
+    try {
+        if (!fs.existsSync(portableDataPath)) {
+            fs.mkdirSync(portableDataPath, { recursive: true });
+        }
+        app.setPath('userData', portableDataPath);
+    } catch (e) {
+        console.error('Failed to set portable data path:', e);
+    }
+}
+
 // 0. 解决自动播放策略限制 (NotAllowedError)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
