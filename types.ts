@@ -38,7 +38,7 @@ export interface CustomReminder {
 export interface AppSettings {
   theme: ThemeMode;
   intervalUnit: IntervalUnit;
-  intervalValue: number;
+  intervalValue: number | '';
   messagePrefix: string;
   messageSuffix: string;
   soundEnabled: boolean;

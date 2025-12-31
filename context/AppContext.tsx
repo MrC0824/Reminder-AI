@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -67,9 +68,9 @@ const SILENT_AUDIO_URL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEA
 const defaultSettings: AppSettings = {
   theme: 'light', 
   intervalUnit: 'minutes',
-  intervalValue: 60,
-  messagePrefix: "已经忙碌",
-  messageSuffix: "了，该休息一下啦！",
+  intervalValue: '',
+  messagePrefix: '',
+  messageSuffix: '',
   soundEnabled: true,
   activeHoursEnabled: false,
   activeHoursRanges: [
@@ -163,7 +164,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return saved ? JSON.parse(saved) : [];
   });
 
-  const calculateTotalSeconds = useCallback((val?: number, unit?: string) => {
+  const calculateTotalSeconds = useCallback((val?: number | '', unit?: string) => {
     const v = (val === undefined) ? settings.intervalValue : val;
     const u = unit ?? settings.intervalUnit;
     

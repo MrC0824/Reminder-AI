@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
@@ -35,46 +36,75 @@ const CustomNumberInput = ({
     className?: string;
     placeholder?: string;
 }) => {
-    const numericValue = value === '' ? NaN : Number(value);
-    
-    // 判断是否达到边界，如果是空值，也视为达到最小值（禁止向下）
+
+    const numericValue = value === '' ? NaN : parseInt(String(value), 10);
     const isMin = value === '' || (!isNaN(numericValue) && numericValue <= min);
     const isMax = !isNaN(numericValue) && numericValue >= max;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
+
+        // 1. 处理空值
         if (val === '') {
             onChange('');
             return;
         }
-        const num = Number(val);
-        if (!isNaN(num)) {
-            if (num > 99999) onChange(99999);
-            else onChange(num);
+
+        // 2. 正则校验：只允许纯数字
+        if (/^\d+$/.test(val)) {
+            const num = parseInt(val, 10);
+
+            if (!isNaN(num)) {
+                // 如果输入值为 0，直接置空
+                if (num === 0) {
+                    onChange('');
+                    return;
+                }
+
+                // 禁止输入超过 5 位数 (或者超过 max)
+                if (num > 99999) { 
+                    return; 
+                }
+
+                // 正常更新
+                onChange(num);
+            }
+        }
+    };
+
+    // 物理拦截按键
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['.', 'e', '+', '-'].includes(e.key)) {
+            e.preventDefault();
         }
     };
 
     const adjustValue = (delta: number) => {
-        // 如果当前为空值，点击增加时直接设置为最小值 (min)，而不是 min + delta
         if (value === '') {
             if (delta > 0) {
-                // 如果 min 是 -Infinity (未设置)，则默认为 1 或 0，这里针对提醒间隔场景默认为 1 比较合理
-                // 但为了通用性，如果 min 存在则用 min，否则用 1
                 const startValue = min > -Infinity ? min : 1;
                 onChange(startValue);
             }
-            // 如果是 delta < 0 (向下)，因为按钮已被 disabled，理论上不会触发，不做处理
             return;
         }
 
-        let current = Number(value);
+        let current = parseInt(String(value), 10);
         if (isNaN(current)) current = 0;
         
-        let next = current + delta;
+        let next = current + Math.round(delta);
         
         if (next < min) next = min;
         if (next > max) next = max;
         
+        if (next === 0) {
+             onChange('');
+             return;
+        }
+
+        if (next > 99999) {
+            next = 99999;
+        }
+
         onChange(next);
     };
 
@@ -84,7 +114,10 @@ const CustomNumberInput = ({
                 type="number"
                 value={value}
                 onChange={handleInputChange}
+                onKeyDown={handleKeyDown} 
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
                 placeholder={placeholder}
+                step={1} 
                 className="w-full h-full bg-transparent border-none focus:ring-0 px-0 text-inherit font-inherit focus:outline-none placeholder-slate-400 no-spinners"
                 style={{ paddingRight: '1.5rem' }}
             />
@@ -783,7 +816,12 @@ export const SettingsPanel: React.FC = () => {
                 {/* 替换为 CustomNumberInput */}
                 <CustomNumberInput 
                     value={newReminderValue}
-                    onChange={(val) => setNewReminderValue(val)}
+                    onChange={(val) => {
+                        let finalVal = val;
+                        if (finalVal !== '' && finalVal < 1) finalVal = 1;
+                        if (finalVal !== '' && finalVal > 99999) finalVal = 99999;
+                        setNewReminderValue(finalVal);
+                    }}
                     min={1}
                     max={99999}
                     placeholder="间隔时长"
@@ -983,11 +1021,11 @@ export const SettingsPanel: React.FC = () => {
                                 let finalVal = val;
                                 if (finalVal !== '' && finalVal < 1) finalVal = 1;
                                 if (finalVal !== '' && finalVal > 99999) finalVal = 99999;
-                                updateSettings({ intervalValue: finalVal as number });
+                                updateSettings({ intervalValue: finalVal });
                             }} 
                             min={1} 
                             max={99999} 
-                            className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-slate-800 dark:text-slate-200 focus-within:border-blue-500" 
+                            className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-slate-800 dark:text-slate-200 focus-within:border-blue-500" 
                         />
                     </div>
                     <div>
