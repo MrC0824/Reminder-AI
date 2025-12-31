@@ -1,20 +1,67 @@
+
 import { TimeRange, WorkMode } from "@/types";
 
 // --- 格式化工具函数 ---
 
-export const formatTime = (seconds: number): string => {
-  if (!Number.isFinite(seconds) || seconds > 359999) {
-    return ">99h";
-  }
-
-  const h = Math.floor(seconds / 3600);
+export const getTimeComponents = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return { d: 0, h: 0, m: 0, s: 0 };
+  const d = Math.floor(seconds / (3600 * 24));
+  const h = Math.floor((seconds % (3600 * 24)) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
+  return { d, h, m, s };
+};
 
-  if (h > 0) {
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+export const formatTime = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return "00:00:00";
   }
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+  const SEC_MINUTE = 60;
+  const SEC_HOUR = 3600;
+  const SEC_DAY = 86400;
+  const SEC_MONTH = 30 * SEC_DAY; // Approx 30 days
+  const SEC_YEAR = 365 * SEC_DAY; // Approx 365 days
+
+  let remaining = seconds;
+
+  // For durations less than a day, keep simple HMS format
+  if (remaining < SEC_DAY) {
+      const h = Math.floor(remaining / SEC_HOUR);
+      const m = Math.floor((remaining % SEC_HOUR) / SEC_MINUTE);
+      const s = Math.floor(remaining % SEC_MINUTE);
+
+      if (h > 0) {
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      }
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // For longer durations, break down into Y/M/D + HMS
+  const y = Math.floor(remaining / SEC_YEAR);
+  remaining %= SEC_YEAR;
+  
+  const m = Math.floor(remaining / SEC_MONTH);
+  remaining %= SEC_MONTH;
+  
+  const d = Math.floor(remaining / SEC_DAY);
+  remaining %= SEC_DAY;
+  
+  const h = Math.floor(remaining / SEC_HOUR);
+  remaining %= SEC_HOUR;
+  
+  const min = Math.floor(remaining / SEC_MINUTE);
+  const s = Math.floor(remaining % SEC_MINUTE);
+
+  const hms = `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+  const parts: string[] = [];
+  if (y > 0) parts.push(`${y}年`);
+  if (m > 0) parts.push(`${m}个月`);
+  if (d > 0) parts.push(`${d}天`);
+  
+  // Combine Y/M/D parts with HMS
+  return `${parts.join(' ')} ${hms}`.trim();
 };
 
 export const formatDateTime = (timestamp: number): string => {
@@ -25,6 +72,17 @@ export const formatDateTime = (timestamp: number): string => {
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+export const formatFullDateTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 };
 
 // --- 节假日数据管理逻辑 (升级版) ---

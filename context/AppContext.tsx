@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -159,12 +160,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const calculateTotalSeconds = useCallback((val?: number, unit?: string) => {
-    const v = val ?? settings.intervalValue;
+    const v = (val === undefined) ? settings.intervalValue : val;
     const u = unit ?? settings.intervalUnit;
+    
+    // 如果值为空字符串或者是NaN，返回0防止错误
+    if ((v as any) === '' || isNaN(Number(v))) return 0;
+    
     let multiplier = 60;
     if (u === 'hours') multiplier = 3600;
     if (u === 'seconds') multiplier = 1;
-    return v * multiplier;
+    return Number(v) * multiplier;
   }, [settings.intervalUnit, settings.intervalValue]);
 
   const [endTime, setEndTime] = useState<number | null>(null);
@@ -457,6 +462,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const triggerAlert = useCallback((sourceId: string): boolean => {
+    // 如果主提醒的时间数值为空或非法，不触发弹窗
+    if (sourceId === 'main') {
+        const val = settingsRef.current.intervalValue;
+        // Fix: Cast val to any to allow check for empty string which can happen at runtime
+        if ((val as any) === '' || isNaN(Number(val)) || Number(val) <= 0) {
+            return false;
+        }
+    }
+
     stopPreviewAudio(); 
 
     // Snapshot current title/message so subsequent edits don't change displayed notification
@@ -779,7 +793,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     if (activeAlerts.has('main')) {
                         // Pause
                     } else {
-                        triggerAlert('main');
+                        // 如果间隔数值未设置（为空），不触发弹窗
+                        const currentVal = settingsRef.current.intervalValue;
+                        // Fix: Cast currentVal to any to allow check for empty string which can happen at runtime
+                        if ((currentVal as any) !== '' && !isNaN(Number(currentVal)) && Number(currentVal) > 0) {
+                            triggerAlert('main');
+                        }
                     }
                 } else {
                     setTimeLeft(diff);
