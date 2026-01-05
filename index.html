@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
   <head>
@@ -43,55 +44,8 @@
   }
 }
 </script>
-    <style>
-      /* Initial Loading Screen Styles */
-      #app-loader {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        background-color: #ffffff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
-        user-select: none;
-        -webkit-user-select: none;
-        -webkit-app-region: drag;
-      }
-      @media (prefers-color-scheme: dark) {
-        #app-loader { background-color: #0f172a; color: #e2e8f0; }
-      }
-      .loader-spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid rgba(59, 130, 246, 0.2);
-        border-radius: 50%;
-        border-top-color: #2563eb;
-        animation: spin 1s linear infinite;
-        -webkit-app-region: no-drag;
-      }
-      .loader-text {
-        margin-top: 1rem;
-        font-family: 'Inter', 'Microsoft YaHei', sans-serif;
-        font-size: 0.875rem;
-        font-weight: 500;
-        opacity: 0.7;
-        letter-spacing: 0.05em;
-        -webkit-app-region: no-drag;
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-    </style>
 </head>
   <body class="transition-colors duration-300">
-    <!-- Loading Screen -->
-    <div id="app-loader">
-      <div class="loader-spinner"></div>
-      <div class="loader-text">正在启动...</div>
-    </div>
-
     <div id="root"></div>
     <!-- Vite Entry Point -->
     <script type="module" src="/index.tsx"></script>

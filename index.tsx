@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -19,19 +20,6 @@ const mountApp = () => {
       <App />
     </React.StrictMode>
   );
-
-  // Fade out and remove the loader after app is mounted
-  const loader = document.getElementById('app-loader');
-  if (loader) {
-    // Small delay to ensure First Paint happens
-    setTimeout(() => {
-        loader.style.opacity = '0';
-        loader.style.visibility = 'hidden';
-        setTimeout(() => {
-            loader.remove();
-        }, 400); // Matches CSS transition duration
-    }, 100);
-  }
 };
 
 if (isElectron) {

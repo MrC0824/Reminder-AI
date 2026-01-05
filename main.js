@@ -285,8 +285,8 @@ function createWindow() {
     height: 600,
     minWidth: 600,
     minHeight: 600,
-    show: false, // 核心优化：默认隐藏，等待内容渲染完成后再显示
-    backgroundColor: backgroundColor, // 核心优化：设置背景色匹配 Loading 层
+    show: false, // 核心优化：默认隐藏，等待内容渲染完成后再显示，彻底杜绝白屏
+    backgroundColor: backgroundColor, // 核心优化：设置背景色，防止 ready-to-show 前的微小闪烁
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -302,7 +302,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
   }
 
-  // 核心优化：监听 ready-to-show 事件，当页面完成首次绘制（Loading层可见）时才显示窗口
+  // 核心优化：监听 ready-to-show 事件，当页面完成首次绘制时才显示窗口
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
