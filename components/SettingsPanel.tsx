@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
@@ -26,7 +25,8 @@ const CustomNumberInput = ({
     max = Infinity,
     step = 1,
     className,
-    placeholder
+    placeholder,
+    onKeyDown
 }: {
     value: number | '';
     onChange: (val: number | '') => void;
@@ -35,6 +35,7 @@ const CustomNumberInput = ({
     step?: number;
     className?: string;
     placeholder?: string;
+    onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }) => {
 
     const numericValue = value === '' ? NaN : parseInt(String(value), 10);
@@ -74,6 +75,10 @@ const CustomNumberInput = ({
 
     // 物理拦截按键
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (onKeyDown) {
+            onKeyDown(e);
+        }
+
         if (['.', 'e', '+', '-'].includes(e.key)) {
             e.preventDefault();
         }
@@ -292,7 +297,19 @@ const CustomTimePicker = ({ value, onChange, className }: { value: string; onCha
 };
 
 // --- 自定义日期时间选择器 ---
-const CustomDateTimePicker = ({ value, onChange, min, className }: { value: string; onChange: (val: string) => void; min?: string; className?: string }) => {
+const CustomDateTimePicker = ({ 
+    value, 
+    onChange, 
+    min, 
+    className,
+    onKeyDown 
+}: { 
+    value: string; 
+    onChange: (val: string) => void; 
+    min?: string; 
+    className?: string;
+    onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const yearRef = useRef<HTMLDivElement>(null);
@@ -382,7 +399,14 @@ const CustomDateTimePicker = ({ value, onChange, min, className }: { value: stri
         <div ref={containerRef} className={`relative flex-1 ${className || ''}`}>
             <div 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full h-[38px] flex items-center cursor-pointer select-none group bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg px-3 hover:border-blue-400 transition-colors justify-start`}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        if (onKeyDown) onKeyDown(e);
+                        setIsOpen(false);
+                    }
+                }}
+                className={`w-full h-[38px] flex items-center cursor-pointer select-none group bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg px-3 hover:border-blue-400 transition-colors justify-start focus:outline-none`}
             >
                 <span className={`text-sm tracking-wide ${value ? 'font-mono font-medium text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
                     {displayValue || '选择日期时间'}
@@ -390,7 +414,11 @@ const CustomDateTimePicker = ({ value, onChange, min, className }: { value: stri
             </div>
 
             {isOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 w-full h-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-xl rounded-lg z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                <div 
+                   onMouseDown={(e) => e.preventDefault()}
+                   className="absolute top-[calc(100%+4px)] left-0 w-full h-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-xl rounded-lg z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100"
+                >
+                   {/* ... 表头部分 ... */}
                    <div className="flex items-center border-b border-gray-100 dark:border-slate-700/50 bg-gray-50/50 dark:bg-slate-900/50 text-[10px] text-slate-400 py-1.5 font-bold">
                        <div className="flex-[1.3] text-center">年</div>
                        <div className="flex-1 text-center">月</div>
@@ -404,28 +432,28 @@ const CustomDateTimePicker = ({ value, onChange, min, className }: { value: stri
                    <div className="flex flex-1 min-h-0 text-xs">
                        <div ref={yearRef} className="flex-[1.3] overflow-y-auto no-scrollbar overscroll-contain relative border-r border-gray-100 dark:border-slate-700/50">
                            {years.map(y => (
-                               <div key={y} data-value={y} onClick={() => handleUpdate('year', y)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 ${y === curY ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{y}</div>
+                               <div key={y} data-value={y} onClick={() => handleUpdate('year', y)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs ${y === curY ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{y}</div>
                            ))}
                        </div>
                        <div ref={monthRef} className="flex-1 overflow-y-auto no-scrollbar overscroll-contain relative border-r border-gray-100 dark:border-slate-700/50">
                            {months.map(m => (
-                               <div key={m} data-value={m} onClick={() => handleUpdate('month', m)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 ${m === curM ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{m}月</div>
+                               <div key={m} data-value={m} onClick={() => handleUpdate('month', m)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs ${m === curM ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{m}月</div>
                            ))}
                        </div>
                        <div ref={dayRef} className="flex-1 overflow-y-auto no-scrollbar overscroll-contain relative border-r border-gray-100 dark:border-slate-700/50">
                            {days.map(d => (
-                               <div key={d} data-value={d} onClick={() => handleUpdate('day', d)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 ${d === curD ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{d}日</div>
+                               <div key={d} data-value={d} onClick={() => handleUpdate('day', d)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs ${d === curD ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{d}日</div>
                            ))}
                        </div>
                        
                        <div ref={hourRef} className="flex-1 overflow-y-auto no-scrollbar overscroll-contain relative border-r border-gray-100 dark:border-slate-700/50">
                            {hours.map(h => (
-                               <div key={h} data-value={h} onClick={() => handleUpdate('hour', h)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 ${h === curH ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{h}</div>
+                               <div key={h} data-value={h} onClick={() => handleUpdate('hour', h)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs ${h === curH ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{h}</div>
                            ))}
                        </div>
                        <div ref={minuteRef} className="flex-1 overflow-y-auto no-scrollbar overscroll-contain relative">
                            {minutes.map(m => (
-                               <div key={m} data-value={m} onClick={() => handleUpdate('minute', m)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 ${m === curMin ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{m}</div>
+                               <div key={m} data-value={m} onClick={() => handleUpdate('minute', m)} className={`text-center py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs ${m === curMin ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>{m}</div>
                            ))}
                        </div>
                    </div>
@@ -480,7 +508,6 @@ export const SettingsPanel: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Monitor editing item existence. If removed (e.g. one-time reminder expired), reset edit mode.
   useEffect(() => {
       if (editingId) {
           const exists = settings.customReminders.some(r => r.id === editingId);
@@ -495,7 +522,6 @@ export const SettingsPanel: React.FC = () => {
       }
   }, [settings.customReminders, editingId]);
 
-  // Fetch version from main process
   useEffect(() => {
       if (ipcRenderer) {
           ipcRenderer.invoke('get-app-version')
@@ -504,7 +530,6 @@ export const SettingsPanel: React.FC = () => {
       }
   }, []);
   
-  // Sort reminders
   const sortedReminders = useMemo(() => {
       return [...settings.customReminders].sort((a, b) => {
           if (a.type !== b.type) return a.type === 'interval' ? -1 : 1;
@@ -777,6 +802,24 @@ export const SettingsPanel: React.FC = () => {
       setIsRecording(false);
   };
 
+  // 统一校验逻辑
+  const isFormValid = useMemo(() => {
+      if (!newReminderTitle.trim()) return false;
+      if (newReminderType === 'interval') {
+          return newReminderValue !== '' && Number(newReminderValue) > 0;
+      } else {
+          return newReminderDateTime !== '';
+      }
+  }, [newReminderTitle, newReminderType, newReminderValue, newReminderDateTime]);
+
+  // 处理回车键事件
+  const handleEnterKey = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          if (!isFormValid) return; 
+          saveCustomReminder();
+      }
+  };
+
   // --- 抽取出来的编辑/添加表单渲染函数 ---
   const renderReminderForm = () => (
     <div className={`p-3 rounded-lg space-y-3 border transition-colors ${editingId ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' : 'bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-700'}`}>
@@ -786,16 +829,16 @@ export const SettingsPanel: React.FC = () => {
                 <button onClick={cancelEdit} className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">取消</button>
             </div>
         )}
-        <div className="flex rounded-md bg-white dark:bg-slate-900 p-1 mb-2 border border-gray-200 dark:border-slate-700">
+        <div className="flex rounded-md bg-white dark:bg-slate-900 p-1 mb-2 border border-gray-200 dark:border-slate-700 h-[38px]">
             <button 
                 onClick={() => setNewReminderType('interval')}
-                className={`flex-1 py-1 text-xs rounded ${newReminderType === 'interval' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-500'}`}
+                className={`flex-1 h-full flex items-center justify-center text-sm rounded ${newReminderType === 'interval' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-500'}`}
             >
                 周期提醒
             </button>
             <button 
                 onClick={() => setNewReminderType('onetime')}
-                className={`flex-1 py-1 text-xs rounded ${newReminderType === 'onetime' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-500'}`}
+                className={`flex-1 h-full flex items-center justify-center text-sm rounded ${newReminderType === 'onetime' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-500'}`}
             >
                 定点提醒
             </button>
@@ -807,13 +850,13 @@ export const SettingsPanel: React.FC = () => {
                     placeholder="提醒内容 (支持 \n 换行)"
                     value={newReminderTitle}
                     onChange={(e) => setNewReminderTitle(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-white"
+                    onKeyDown={handleEnterKey}
+                    className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-white"
             />
         </div>
         
         {newReminderType === 'interval' ? (
             <div className="flex gap-2">
-                {/* 替换为 CustomNumberInput */}
                 <CustomNumberInput 
                     value={newReminderValue}
                     onChange={(val) => {
@@ -822,10 +865,11 @@ export const SettingsPanel: React.FC = () => {
                         if (finalVal !== '' && finalVal > 99999) finalVal = 99999;
                         setNewReminderValue(finalVal);
                     }}
+                    onKeyDown={handleEnterKey}
                     min={1}
                     max={99999}
                     placeholder="间隔时长"
-                    className="flex-1 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus-within:border-blue-500 text-slate-800 dark:text-white"
+                    className="flex-1 h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-sm focus-within:border-blue-500 text-slate-800 dark:text-white"
                 />
                 <CustomSelect 
                     value={newReminderUnit}
@@ -839,7 +883,7 @@ export const SettingsPanel: React.FC = () => {
                 />
                 <button 
                         onClick={saveCustomReminder}
-                        disabled={!newReminderTitle.trim() || newReminderValue === '' || Number(newReminderValue) <= 0}
+                        disabled={!isFormValid}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     {editingId ? '保存' : '添加'}
@@ -847,15 +891,15 @@ export const SettingsPanel: React.FC = () => {
             </div>
         ) : (
             <div className="flex gap-2">
-                {/* 替换为新的 5 列自定义日期时间选择器 */}
                 <CustomDateTimePicker 
                     value={newReminderDateTime}
                     onChange={(val) => setNewReminderDateTime(val)}
                     min={minDateTime}
+                    onKeyDown={handleEnterKey}
                 />
                 <button 
                         onClick={saveCustomReminder}
-                        disabled={!newReminderTitle.trim() || !newReminderDateTime}
+                        disabled={!isFormValid}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     {editingId ? '保存' : '添加'}
@@ -1014,7 +1058,6 @@ export const SettingsPanel: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-xs text-slate-500 mb-1 block font-medium">间隔时长</label>
-                        {/* 替换为 CustomNumberInput */}
                         <CustomNumberInput 
                             value={settings.intervalValue} 
                             onChange={(val) => {
@@ -1025,6 +1068,7 @@ export const SettingsPanel: React.FC = () => {
                             }} 
                             min={1} 
                             max={99999} 
+                            // [修复] 使用 h-[38px] 并移除 py-2
                             className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-slate-800 dark:text-slate-200 focus-within:border-blue-500" 
                         />
                     </div>
@@ -1045,11 +1089,11 @@ export const SettingsPanel: React.FC = () => {
                 <div className="space-y-3">
                     <div>
                         <label className="text-xs text-slate-500 mb-1 block font-medium">文案前缀</label>
-                        <input type="text" name="messagePrefix" value={settings.messagePrefix} onChange={handleChange} className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500" />
+                        <input type="text" name="messagePrefix" value={settings.messagePrefix} onChange={handleChange} className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500" />
                     </div>
                     <div>
                         <label className="text-xs text-slate-500 mb-1 block font-medium">文案后缀</label>
-                        <input type="text" name="messageSuffix" value={settings.messageSuffix} onChange={handleChange} className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500" />
+                        <input type="text" name="messageSuffix" value={settings.messageSuffix} onChange={handleChange} className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500" />
                     </div>
                 </div>
             </div>
@@ -1096,14 +1140,14 @@ export const SettingsPanel: React.FC = () => {
                                     <div className="flex items-center gap-1">
                                             <button 
                                                 onClick={() => startEditing(reminder.id)}
-                                                className={`p-1 shrink-0 transition-colors ${isEditingThis ? 'text-blue-600 dark:text-blue-400' : 'text-blue-400 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300'}`}
+                                                className={`p-1 shrink-0 transition-colors focus:outline-none ${isEditingThis ? 'text-blue-600 dark:text-blue-400' : 'text-blue-400 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300'}`}
                                                 title={isEditingThis ? "取消编辑" : "编辑"}
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
                                             <button 
                                                 onClick={() => deleteCustomReminder(reminder.id)}
-                                                className="text-red-400 hover:text-red-500 dark:text-red-300 dark:hover:text-red-200 p-1 shrink-0 transition-colors"
+                                                className="text-red-400 hover:text-red-500 dark:text-red-300 dark:hover:text-red-200 p-1 shrink-0 transition-colors focus:outline-none"
                                                 title="删除"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

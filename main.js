@@ -1,6 +1,6 @@
 
 
-const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell, globalShortcut, powerMonitor } = require('electron');
+const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell, globalShortcut, powerMonitor, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -276,11 +276,17 @@ function handleWindowDismiss(id) {
 }
 
 function createWindow() {
+  // 优化：获取系统主题色，作为窗口初始背景色，避免白屏闪烁
+  const isDarkMode = nativeTheme.shouldUseDarkColors;
+  const backgroundColor = isDarkMode ? '#0f172a' : '#ffffff';
+
   mainWindow = new BrowserWindow({
     width: 600,
     height: 600,
     minWidth: 600,
     minHeight: 600,
+    show: false, // 核心优化：默认隐藏，等待内容渲染完成后再显示
+    backgroundColor: backgroundColor, // 核心优化：设置背景色匹配 Loading 层
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -295,6 +301,12 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
   }
+
+  // 核心优化：监听 ready-to-show 事件，当页面完成首次绘制（Loading层可见）时才显示窗口
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   mainWindow.on('close', (event) => {
     if (isQuitting) return;
