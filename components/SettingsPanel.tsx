@@ -475,7 +475,9 @@ export const SettingsPanel: React.FC = () => {
       previewingId,
       customTimersStatus,
       checkUpdates,
-      updateStatus
+      updateStatus,
+      autoStartEnabled,
+      toggleAutoStart
   } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -489,6 +491,9 @@ export const SettingsPanel: React.FC = () => {
   const [minDateTime, setMinDateTime] = useState(getCurrentLocalISO);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState('');
+
+  // 控制“系统设置”的折叠状态
+  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
 
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -983,76 +988,126 @@ export const SettingsPanel: React.FC = () => {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">
-            {/* 1. 外观设置 */}
+            
+            {/* 1. 系统设置 (合并了原外观、自启动、快捷键) */}
             <div className="space-y-4">
-                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">外观</label>
-                <div className="flex gap-2">
-                    {themes.map(t => (
-                        <button
-                                key={t.id}
-                                onClick={() => updateSettings({ theme: t.id as any })}
-                                className={`flex-1 py-2 px-3 rounded-lg border flex items-center justify-center gap-2 text-sm transition-all ${
-                                    settings.theme === t.id 
-                                    ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
-                                    : 'bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
-                                }`}
-                        >
-                            <span>{t.icon}</span>
-                            <span>{t.name}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 2. 全局快捷键 */}
-            {ipcRenderer && (
-                <div className="space-y-4">
-                    <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">全局快捷键</label>
-                    <div className="flex flex-col gap-2">
-                         <span className="text-xs text-slate-500">一键显示/隐藏主界面 (即使应用在后台)</span>
-                         <div className="flex gap-2">
-                             <div className={`relative flex-1 bg-white dark:bg-slate-900 border rounded-lg flex items-center px-3 py-2 transition-colors ${isRecording ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-300 dark:border-slate-600'}`}>
-                                 <input
-                                    ref={shortcutInputRef}
-                                    type="text"
-                                    readOnly
-                                    value={isRecording ? '请按下快捷键组合...' : (settings.globalShortcut || '未设置')}
-                                    onKeyDown={handleShortcutKeyDown}
-                                    onBlur={(e) => {
-                                        if (ignoreBlurRef.current) {
-                                            e.target.focus();
-                                            return;
-                                        }
-                                        setIsRecording(false);
-                                    }}
-                                    className={`w-full bg-transparent outline-none text-sm cursor-default ${isRecording ? 'text-blue-500' : (settings.globalShortcut ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400')}`}
-                                 />
-                                 {settings.globalShortcut && !isRecording && (
-                                     <button onClick={clearShortcut} className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                     </button>
-                                 )}
-                             </div>
-                             <div 
-                                onMouseDown={(e) => isRecording && e.preventDefault()}
-                             >
-                                <button 
-                                    onClick={() => {
-                                        ignoreBlurRef.current = true;
-                                        setIsRecording(true);
-                                    }}
-                                    disabled={isRecording}
-                                    className={`h-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isRecording ? 'bg-gray-100 text-slate-500 pointer-events-none' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
-                                >
-                                    {isRecording ? '录制中...' : '重新设置'}
-                                </button>
-                             </div>
-                          </div>
+                {/* 标题栏 - 点击可切换折叠状态 */}
+                <div 
+                    onClick={() => setIsSystemSettingsOpen(!isSystemSettingsOpen)}
+                    className="flex items-center justify-between cursor-pointer group border-b border-gray-200 dark:border-slate-700 pb-2 select-none"
+                >
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        系统设置
+                    </label>
+                    <div className={`text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-transform duration-200 ${isSystemSettingsOpen ? 'rotate-180' : ''}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
                     </div>
                 </div>
-            )}
+                
+                {/* 内容区域 - 根据状态显示/隐藏 */}
+                {isSystemSettingsOpen && (
+                    <div className="bg-gray-50/50 dark:bg-slate-900/30 rounded-xl border border-gray-200 dark:border-slate-700/50 p-4 space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                        
+                        {/* 1.1 开机自启动 (仅 Electron 环境显示) */}
+                        {ipcRenderer && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">开机自启动</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">登录系统后自动运行应用</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" checked={autoStartEnabled} onChange={toggleAutoStart} className="sr-only peer" />
+                                        <div className="w-11 h-6 bg-gray-300 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                    </label>
+                                </div>
+                                <div className="h-[1px] bg-gray-200 dark:bg-slate-700/50"></div>
+                            </>
+                        )}
 
-            {/* 3. 主提醒 */}
+                        {/* 1.2 外观设置 (通用) */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">外观风格</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">切换应用显示的色彩主题</p>
+                            </div>
+                            <div className="flex gap-2">
+                                {themes.map(t => (
+                                    <button
+                                            key={t.id}
+                                            onClick={() => updateSettings({ theme: t.id as any })}
+                                            className={`py-1.5 px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-medium transition-all ${
+                                                settings.theme === t.id 
+                                                ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
+                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                            }`}
+                                    >
+                                        <span>{t.icon}</span>
+                                        <span>{t.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 1.3 全局快捷键 (仅 Electron 环境显示) */}
+                        {ipcRenderer && (
+                            <>
+                                <div className="h-[1px] bg-gray-200 dark:bg-slate-700/50"></div>
+                                
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">全局快捷键</span>
+                                        <span className="text-[10px] text-slate-400">一键显示/隐藏主界面</span>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        <div className={`relative flex-1 bg-white dark:bg-slate-900 border rounded-lg flex items-center px-3 py-2 transition-colors ${isRecording ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-300 dark:border-slate-600'}`}>
+                                            <input
+                                                ref={shortcutInputRef}
+                                                type="text"
+                                                readOnly
+                                                value={isRecording ? '请按下快捷键组合...' : (settings.globalShortcut || '未设置')}
+                                                onKeyDown={handleShortcutKeyDown}
+                                                onBlur={(e) => {
+                                                    if (ignoreBlurRef.current) {
+                                                        e.target.focus();
+                                                        return;
+                                                    }
+                                                    setIsRecording(false);
+                                                }}
+                                                className={`w-full bg-transparent outline-none text-sm cursor-default ${isRecording ? 'text-blue-500' : (settings.globalShortcut ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400')}`}
+                                            />
+                                            {settings.globalShortcut && !isRecording && (
+                                                <button onClick={clearShortcut} className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div 
+                                            onMouseDown={(e) => isRecording && e.preventDefault()}
+                                        >
+                                            <button 
+                                                onClick={() => {
+                                                    ignoreBlurRef.current = true;
+                                                    setIsRecording(true);
+                                                }}
+                                                disabled={isRecording}
+                                                className={`h-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isRecording ? 'bg-gray-100 text-slate-500 pointer-events-none' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                            >
+                                                {isRecording ? '录制中...' : '设置'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 2. 主提醒 */}
             <div className="space-y-4">
                 <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">主提醒 (循环)</label>
                 <div className="grid grid-cols-2 gap-4">
@@ -1068,7 +1123,6 @@ export const SettingsPanel: React.FC = () => {
                             }} 
                             min={1} 
                             max={99999} 
-                            // [修复] 使用 h-[38px] 并移除 py-2
                             className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-slate-800 dark:text-slate-200 focus-within:border-blue-500" 
                         />
                     </div>
@@ -1098,7 +1152,7 @@ export const SettingsPanel: React.FC = () => {
                 </div>
             </div>
 
-            {/* 4. 自定义内容提醒 */}
+            {/* 3. 自定义内容提醒 */}
             <div className="space-y-4">
                 <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">自定义内容提醒</label>
                 <div className="space-y-3">
@@ -1169,7 +1223,7 @@ export const SettingsPanel: React.FC = () => {
                 </div>
             </div>
             
-            {/* 5. 时段启停 */}
+            {/* 4. 时段启停 */}
             <div className="space-y-4">
                 <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">时段启停 (工作时段)</label>
                 <div className="bg-gray-50/50 dark:bg-slate-900/30 rounded-xl border border-gray-200 dark:border-slate-700/50 p-4 space-y-4">
@@ -1246,7 +1300,7 @@ export const SettingsPanel: React.FC = () => {
                 </div>
             </div>
 
-            {/* 6. 声音设置 */}
+            {/* 5. 声音设置 */}
             <div className="space-y-4">
                 <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">声音</label>
                 <div className="bg-gray-50/50 dark:bg-slate-900/30 rounded-xl border border-gray-200 dark:border-slate-700/50 p-4 space-y-4">

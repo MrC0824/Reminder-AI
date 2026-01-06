@@ -530,6 +530,18 @@ ipcMain.handle('get-app-version', () => {
     return app.getVersion();
 });
 
+ipcMain.handle('get-auto-start-status', () => {
+    return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.on('toggle-auto-start', (event, openAtLogin) => {
+    app.setLoginItemSettings({
+        openAtLogin: openAtLogin,
+        path: process.execPath, 
+        args: [] 
+    });
+});
+
 ipcMain.on('update-global-shortcut', (event, shortcut) => {
     globalShortcut.unregisterAll();
     if (shortcut) {

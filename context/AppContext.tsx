@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -59,6 +60,10 @@ interface AppContextType {
   restartApp: () => void;
   skipUpdate: (version: string) => void;
   remindLater: () => void;
+
+  // Auto Start
+  autoStartEnabled: boolean;
+  toggleAutoStart: () => void;
 }
 
 const SYSTEM_SOUND_ID = 'system_default';
@@ -149,6 +154,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [updateErrorMsg, setUpdateErrorMsg] = useState('');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isPortableUpdate, setIsPortableUpdate] = useState(false);
+  
+  // Auto Start State
+  const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   
   // Ref to track if the current check is manual (initiated by user)
   const isManualCheckRef = useRef(false);
@@ -266,6 +274,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ipcRenderer.on('update-error', onUpdateError);
     ipcRenderer.on('system-resume', onSystemResume);
 
+    // Initial check for auto-start status
+    ipcRenderer.invoke('get-auto-start-status')
+        .then((enabled: boolean) => setAutoStartEnabled(enabled))
+        .catch((err: any) => console.warn('Failed to get auto-start status:', err));
+
     return () => {
         ipcRenderer.removeListener('update-available', onUpdateAvailable);
         ipcRenderer.removeListener('update-not-available', onUpdateNotAvailable);
@@ -312,6 +325,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsUpdateModalOpen(false);
       setUpdateStatus(null);
   };
+
+  const toggleAutoStart = useCallback(() => {
+      if (!ipcRenderer) return;
+      const newValue = !autoStartEnabled;
+      setAutoStartEnabled(newValue);
+      ipcRenderer.send('toggle-auto-start', newValue);
+  }, [autoStartEnabled]);
 
   useEffect(() => {
       if (isNotificationMode) return;
@@ -1092,6 +1112,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         restartApp,
         skipUpdate,
         remindLater,
+        // Auto Start
+        autoStartEnabled,
+        toggleAutoStart
       }}
     >
       {children}
